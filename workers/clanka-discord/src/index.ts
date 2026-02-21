@@ -8,6 +8,8 @@ export interface Env {
   DISCORD_PUBLIC_KEY: string;
   DISCORD_APPLICATION_ID: string;
   DISCORD_TOKEN: string;
+  GITHUB_TOKEN: string;
+  CLANKA_ADMIN_IDS: string; // Comma-separated list of Discord User IDs
   CLANKA_STATE: KVNamespace;
 }
 
@@ -36,6 +38,20 @@ export default {
     if (interaction.type === InteractionType.PING) {
       return new Response(
         JSON.stringify({ type: InteractionResponseType.PONG }),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Security: User-Level Access Lock
+    const userId = interaction.member?.user?.id || interaction.user?.id;
+    const allowedIds = (env.CLANKA_ADMIN_IDS || '').split(',');
+    
+    if (!allowedIds.includes(userId)) {
+      return new Response(
+        JSON.stringify({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: { content: `🚫 **Access Denied.** Your User ID (${userId}) is not authorized to command Clanka.` },
+        }),
         { headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -73,11 +89,6 @@ export default {
 
         const [_, owner, repo, pull_number] = match;
 
-        // Start background processing
-        // Note: Discord expects a response within 3 seconds. 
-        // For long-running tasks, we acknowledge now and then use the interaction token to follow up.
-        // For now, we fetch metadata immediately.
-        
         try {
           const githubResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
             headers: {
