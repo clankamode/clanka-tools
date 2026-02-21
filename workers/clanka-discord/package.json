@@ -1,0 +1,16 @@
+{
+  "name": "clanka-discord",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "register": "node scripts/register.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "discord-interactions": "^4.4.0"
+  }
+}
