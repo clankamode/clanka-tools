@@ -21,6 +21,14 @@ const COMMANDS = [
   {
     name: 'feedback',
     description: 'Check latest user feedback entries',
+    options: [
+      {
+        type: 4, // INTEGER
+        name: 'limit',
+        description: 'Number of entries to fetch (default 5)',
+        required: false,
+      },
+    ],
   }
 ];
 

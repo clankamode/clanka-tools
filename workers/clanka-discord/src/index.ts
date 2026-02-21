@@ -11,6 +11,8 @@ export interface Env {
   DISCORD_APPLICATION_ID: string;
   DISCORD_TOKEN: string;
   GITHUB_TOKEN: string;
+  SUPABASE_URL: string;
+  SUPABASE_SERVICE_ROLE_KEY: string;
   CLANKA_ADMIN_IDS: string;
   CLANKA_STATE: KVNamespace;
 }
@@ -118,9 +120,38 @@ export default {
 
         // Command: /feedback
         if (name === 'feedback') {
+          const limit = options?.find((opt: any) => opt.name === 'limit')?.value || 5;
+
+          const response = await fetch(`${env.SUPABASE_URL}/rest/v1/UserFeedback?select=*&order=created_at.desc&limit=${limit}`, {
+            headers: {
+              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
+              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error(`Supabase error: ${response.statusText}`);
+          }
+
+          const feedbackData: any[] = await response.json();
+
+          if (feedbackData.length === 0) {
+            return this.jsonResponse({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: { content: '📥 **Feedback Engine:** No recent user feedback found.' },
+            });
+          }
+
+          const feedbackList = feedbackData.map((f: any) => 
+            `• **[${f.category}]** ${f.message.substring(0, 100)}${f.message.length > 100 ? '...' : ''}\n  *Status: ${f.status} | Page: ${f.page_path || 'unknown'}*`
+          ).join('\n\n');
+
           return this.jsonResponse({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { content: '📥 **Feedback Engine:** Feature integration in progress.' },
+            data: { 
+              content: `📥 **Latest User Feedback (Last ${feedbackData.length}):**\n\n${feedbackList}`
+            },
           });
         }
       }
