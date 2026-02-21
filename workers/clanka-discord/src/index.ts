@@ -104,6 +104,32 @@ export default {
 
           const prData: any = await githubResponse.json();
 
+          // Fetch the Diff for logic analysis
+          const diffResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
+            headers: {
+              'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
+              'User-Agent': 'Clanka-Discord-Worker',
+              'Accept': 'application/vnd.github.v3.diff' // Request raw diff
+            }
+          });
+
+          let logicSummary = 'Analysis failed.';
+          if (diffResponse.ok) {
+            const diffText = await diffResponse.text();
+            
+            // Industrial Minimalism Logic: Extract "spine" changes (new files, exported symbols, logic branches)
+            // This is the baseline logic while the full LLM summarizer is being wired.
+            const lines = diffText.split('\n');
+            const newFiles = lines.filter(l => l.startsWith('+++ b/')).map(l => l.replace('+++ b/', ''));
+            const exportedSymbols = lines.filter(l => l.startsWith('+export ') || l.startsWith('+  export ')).length;
+            
+            logicSummary = `**Spine Logic Overview:**\n` +
+                           `- **Modified Files:** ${newFiles.length}\n` +
+                           `- **New Exports:** ${exportedSymbols}\n` +
+                           `- **Core Changes:** Detected ${newFiles.slice(0, 3).join(', ')}${newFiles.length > 3 ? '...' : ''}\n\n` +
+                           `*Full cognitive review pass pending.*`;
+          }
+
           return new Response(
             JSON.stringify({
               type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -113,7 +139,7 @@ export default {
                          `**Author:** ${prData.user.login}\n` +
                          `**Status:** ${prData.state}\n` +
                          `**Diff:** +${prData.additions} / -${prData.deletions}\n\n` +
-                         `*Reviewer engine is generating logic summary...*`
+                         `${logicSummary}`
               },
             }),
             { headers: { 'Content-Type': 'application/json' } }
