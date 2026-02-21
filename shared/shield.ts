@@ -1,25 +1,36 @@
-export const SHIELD_PATTERS = [
+export const SHIELD_PATTERNS = [
   /ignore all previous/i,
   /system prompt/i,
   /reveal your instructions/i,
   /forget your rules/i,
-  /new persona/i
+  /new persona/i,
+  /dan mode/i,
+  /jailbreak/i,
+  /<script/i,
+  /javascript:/i,
+  /data:text\/html/i
 ];
 
 /**
- * Basic Triage Pass to protect against common prompt injection patterns.
- * Focuses on protecting Massa's sensitive info and Clanka's internal invariants.
+ * Multi-Pass Input Triage
+ * Protects Massa's infrastructure and Clanka's internal state.
  */
 export function triageInput(input: string): { safe: boolean; reason?: string } {
-  for (const pattern of SHIELD_PATTERS) {
+  // Pass 1: Pattern Matching
+  for (const pattern of SHIELD_PATTERNS) {
     if (pattern.test(input)) {
-      return { safe: false, reason: 'Potential prompt injection detected.' };
+      return { safe: false, reason: 'Security invariant violation: restricted pattern detected.' };
     }
   }
 
-  // Length guard for basic DoS protection on worker
+  // Pass 2: Volume/DoS Guard
   if (input.length > 2000) {
-    return { safe: false, reason: 'Input exceeds safety threshold.' };
+    return { safe: false, reason: 'Resource invariant violation: input volume exceeds threshold.' };
+  }
+
+  // Pass 3: Character Encoding Probes
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(input)) {
+    return { safe: false, reason: 'Protocol violation: non-printable control characters detected.' };
   }
 
   return { safe: true };
