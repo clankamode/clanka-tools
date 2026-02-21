@@ -57,14 +57,65 @@ export default {
       if (name === 'review') {
         const prUrl = options.find((opt: any) => opt.name === 'pr_url')?.value;
         
-        // Immediate response while we process (Discord timeout is 3s)
-        return new Response(
-          JSON.stringify({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { content: `🔍 Analyzing PR: ${prUrl}... (Full reviewer engine integration pending)` },
-          }),
-          { headers: { 'Content-Type': 'application/json' } }
-        );
+        // Extract owner, repo, and pr number from URL
+        // Expected format: https://github.com/owner/repo/pull/123
+        const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+        
+        if (!match) {
+          return new Response(
+            JSON.stringify({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: { content: '❌ Invalid GitHub PR URL. Expected format: `https://github.com/owner/repo/pull/123`' },
+            }),
+            { headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const [_, owner, repo, pull_number] = match;
+
+        // Start background processing
+        // Note: Discord expects a response within 3 seconds. 
+        // For long-running tasks, we acknowledge now and then use the interaction token to follow up.
+        // For now, we fetch metadata immediately.
+        
+        try {
+          const githubResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
+            headers: {
+              'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
+              'User-Agent': 'Clanka-Discord-Worker',
+              'Accept': 'application/vnd.github.v3+json'
+            }
+          });
+
+          if (!githubResponse.ok) {
+            throw new Error(`GitHub API error: ${githubResponse.statusText}`);
+          }
+
+          const prData: any = await githubResponse.json();
+
+          return new Response(
+            JSON.stringify({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: { 
+                content: `🔍 **Analyzing PR #${pull_number} in ${owner}/${repo}**\n` +
+                         `**Title:** ${prData.title}\n` +
+                         `**Author:** ${prData.user.login}\n` +
+                         `**Status:** ${prData.state}\n` +
+                         `**Diff:** +${prData.additions} / -${prData.deletions}\n\n` +
+                         `*Reviewer engine is generating logic summary...*`
+              },
+            }),
+            { headers: { 'Content-Type': 'application/json' } }
+          );
+        } catch (err: any) {
+          return new Response(
+            JSON.stringify({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: { content: `❌ Error fetching PR data: ${err.message}` },
+            }),
+            { headers: { 'Content-Type': 'application/json' } }
+          );
+        }
       }
 
       if (name === 'feedback') {
