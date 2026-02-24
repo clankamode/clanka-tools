@@ -17,6 +17,10 @@ export interface Env {
   CLANKA_STATE: KVNamespace;
 }
 
+function jsonResponse(obj: any): Response {
+  return new Response(JSON.stringify(obj), { headers: { 'Content-Type': 'application/json' } });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
@@ -50,7 +54,7 @@ export default {
       const userId = interaction.member?.user?.id || interaction.user?.id;
       const allowedIds = (env.CLANKA_ADMIN_IDS || '').split(',');
       if (!allowedIds.includes(userId)) {
-        return this.jsonResponse({
+        return jsonResponse({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: { content: `🚫 **Access Denied.** Unauthorized User ID: ${userId}` },
         });
@@ -61,7 +65,7 @@ export default {
 
         // Command: /status
         if (name === 'status') {
-          return this.jsonResponse({
+          return jsonResponse({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: { content: '⚡ **CLANKA: Operational.** Systems verified. Shield active.' },
           });
@@ -74,7 +78,7 @@ export default {
           // Triage Input
           const triage = triageInput(prUrl);
           if (!triage.safe) {
-            return this.jsonResponse({
+            return jsonResponse({
               type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
               data: { content: `⚠️ **Shield Alert:** ${triage.reason}` },
             });
@@ -82,7 +86,7 @@ export default {
 
           const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
           if (!match) {
-            return this.jsonResponse({
+            return jsonResponse({
               type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
               data: { content: '❌ Invalid GitHub PR URL.' },
             });
@@ -106,7 +110,7 @@ export default {
           const diffText = diffRes.ok ? await diffRes.text() : '';
           const analysis = analyzeDiff(diffText);
 
-          return this.jsonResponse({
+          return jsonResponse({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: { 
               content: `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
@@ -137,7 +141,7 @@ export default {
           const feedbackData: any[] = await response.json();
 
           if (feedbackData.length === 0) {
-            return this.jsonResponse({
+            return jsonResponse({
               type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
               data: { content: '📥 **Feedback Engine:** No recent user feedback found.' },
             });
@@ -147,10 +151,25 @@ export default {
             `• **[${f.category}]** ${f.message.substring(0, 100)}${f.message.length > 100 ? '...' : ''}\n  *Status: ${f.status} | Page: ${f.page_path || 'unknown'}*`
           ).join('\n\n');
 
-          return this.jsonResponse({
+          return jsonResponse({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: { 
               content: `📥 **Latest User Feedback (Last ${feedbackData.length}):**\n\n${feedbackList}`
+            },
+          });
+        }
+
+        // Command: /help
+        if (name === 'help') {
+          return jsonResponse({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content:
+                `📘 **Clanka Commands**\n\n` +
+                `• \`/status\` - Check if Clanka is operational\n` +
+                `• \`/review pr_url\` - Run a heuristic code review on a GitHub PR\n` +
+                `• \`/feedback [limit]\` - Show recent user feedback from Supabase\n` +
+                `• \`/help\` - Show this help message`,
             },
           });
         }
@@ -159,14 +178,10 @@ export default {
       return new Response('Unknown interaction', { status: 400 });
     } catch (err: any) {
       // Fail-safe: No stack traces leaked
-      return this.jsonResponse({
+      return jsonResponse({
         type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
         data: { content: `❌ **System Error:** Internal failure during processing.` },
       });
     }
-  },
-
-  jsonResponse(obj: any): Response {
-    return new Response(JSON.stringify(obj), { headers: { 'Content-Type': 'application/json' } });
   }
 };
