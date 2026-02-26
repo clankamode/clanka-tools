@@ -2,12 +2,12 @@
 > Last updated: 2026-02-25 | Status: open
 
 ## 🔴 High Priority
-- [ ] **Add tests for `shared/shield.ts`** — `triageInput` and `SHIELD_PATTERNS` have no test file. Write tests for: each pattern match (prompt injection, XSS, data URLs), input >2000 chars, safe inputs that shouldn't be flagged, edge cases (mixed case, unicode).
-- [ ] **Add tests for `shared/spine.ts`** — `analyzeDiff` has no test coverage. Test: added-only diff, removed-only, mixed, empty diff, large diff, binary file markers.
+- [x] **Add tests for `shared/shield.ts`** — 27 tests written and passing (2026-02-26)
+- [x] **Add tests for `shared/spine.ts`** — 10 tests written and passing (2026-02-26)
 - [ ] **Deploy `workers/clanka-discord`** — verify the worker is actually deployed to Cloudflare and handling Discord interactions. Run `npx wrangler tail` to confirm live traffic or confirm deploy status.
 
 ## 🟡 Medium Priority
-- [ ] **Add root `package.json`** — repo has no root package.json, making it awkward to run scripts or install shared deps. Add root workspace config pointing to `workers/clanka-discord` and `shared/`.
+- [x] **Add root `package.json`** — done, with vitest workspace config (2026-02-26)
 - [ ] **`shared/shield.ts` — expand patterns** — add patterns for: base64-encoded injections, markdown link exploits (`[click me](javascript:...)`), null bytes, SSRF-adjacent patterns (`file://`, `localhost`, `169.254.`).
 - [ ] **Add CI workflow** — no `.github/workflows/` in this repo. Add lint + build + test (once tests exist).
 - [ ] **`shared/` — add index.ts barrel export** — currently consumers import directly from `shield.ts` / `spine.ts`. Add `shared/index.ts` re-exporting both for cleaner consumption.
