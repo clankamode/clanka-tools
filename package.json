@@ -1,0 +1,18 @@
+{
+  "name": "clanka-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Clanka tooling — Discord worker, shared utilities",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "cd workers/clanka-discord && npm run build"
+  },
+  "devDependencies": {
+    "vitest": "^1.6.0",
+    "typescript": "^5.4.0"
+  },
+  "workspaces": [
+    "workers/clanka-discord"
+  ]
+}
