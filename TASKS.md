@@ -10,7 +10,7 @@
 - [x] **Add root `package.json`** — done, with vitest workspace config (2026-02-26)
 - [ ] **`shared/shield.ts` — expand patterns** — add patterns for: base64-encoded injections, markdown link exploits (`[click me](javascript:...)`), null bytes, SSRF-adjacent patterns (`file://`, `localhost`, `169.254.`).
 - [x] **Add CI workflow** — GitHub Actions CI (lint + test) added and passing (2026-02-26)
-- [ ] **`shared/` — add index.ts barrel export** — currently consumers import directly from `shield.ts` / `spine.ts`. Add `shared/index.ts` re-exporting both for cleaner consumption.
+- [x] **`shared/` — add index.ts barrel export** — currently consumers import directly from `shield.ts` / `spine.ts`. Add `shared/index.ts` re-exporting both for cleaner consumption.
 
 ## 🟢 Low Priority / Nice to Have
 - [ ] **`workers/clanka-discord` — add command registry** — current Discord handler likely handles one or few slash commands. Add a typed command registry so adding new commands is a one-liner.
