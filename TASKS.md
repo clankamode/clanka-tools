@@ -1,5 +1,5 @@
 # TASKS.md — clanka-tools
-> Last updated: 2026-02-25 | Status: open
+> Last updated: 2026-02-28 | Status: open
 
 ## 🔴 High Priority
 - [x] **Add tests for `shared/shield.ts`** — 27 tests written and passing (2026-02-26)
@@ -14,7 +14,7 @@
 
 ## 🟢 Low Priority / Nice to Have
 - [ ] **`workers/clanka-discord` — add command registry** — current Discord handler likely handles one or few slash commands. Add a typed command registry so adding new commands is a one-liner.
-- [ ] **`shared/spine.ts` — risk scoring** — `analyzeDiff` currently returns structural info. Add a `riskScore(diff)` fn that returns 0–100 based on: lines changed, files touched, test ratio, whether src vs config files.
+- [x] **`shared/spine.ts` — risk scoring** — `riskScore(diff)` added and exported, with tests covering lines changed, files touched, test ratio, src/config weighting, and 0–100 bounds (2026-02-28).
 - [ ] **`docs/` — add architecture diagram** — show how `shield.ts` and `spine.ts` are used by the Discord worker and any other consumers.
 
 ## 🧠 Notes
