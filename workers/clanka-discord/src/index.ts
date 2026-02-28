@@ -1,10 +1,13 @@
 import {
   InteractionType,
-  InteractionResponseType,
   verifyKey,
 } from 'discord-interactions';
-import { triageInput } from '../../shared/shield';
-import { analyzeDiff } from '../../shared/spine';
+import {
+  commandRegistry,
+  type CommandExecutionEnvironment,
+  type DiscordInteraction,
+  type DiscordResponse,
+} from '../commands/registry';
 
 export interface Env {
   DISCORD_PUBLIC_KEY: string;
@@ -14,11 +17,18 @@ export interface Env {
   SUPABASE_URL: string;
   SUPABASE_SERVICE_ROLE_KEY: string;
   CLANKA_ADMIN_IDS: string;
-  CLANKA_STATE: KVNamespace;
+  CLANKA_STATE: unknown;
 }
 
-function jsonResponse(obj: any): Response {
+function jsonResponse(obj: DiscordResponse): Response {
   return new Response(JSON.stringify(obj), { headers: { 'Content-Type': 'application/json' } });
+}
+
+function pongResponse(): DiscordResponse {
+  return {
+    type: 1,
+    data: undefined,
+  };
 }
 
 export default {
@@ -42,12 +52,10 @@ export default {
       }
 
       const interaction = JSON.parse(body);
+      const typedInteraction = interaction as DiscordInteraction;
 
       if (interaction.type === InteractionType.PING) {
-        return new Response(
-          JSON.stringify({ type: InteractionResponseType.PONG }),
-          { headers: { 'Content-Type': 'application/json' } }
-        );
+        return jsonResponse(pongResponse());
       }
 
       // Security: Admin Lock
@@ -55,131 +63,40 @@ export default {
       const allowedIds = (env.CLANKA_ADMIN_IDS || '').split(',');
       if (!allowedIds.includes(userId)) {
         return jsonResponse({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          type: 4,
           data: { content: `🚫 **Access Denied.** Unauthorized User ID: ${userId}` },
         });
       }
 
       if (interaction.type === InteractionType.APPLICATION_COMMAND) {
-        const { name, options } = interaction.data;
+        const name = interaction.data?.name;
+        const handler = name ? commandRegistry[name] : undefined;
 
-        // Command: /status
-        if (name === 'status') {
-          return jsonResponse({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { content: '⚡ **CLANKA: Operational.** Systems verified. Shield active.' },
-          });
+        if (!handler) {
+          return new Response('Unknown command', { status: 400 });
         }
 
-        // Command: /review
-        if (name === 'review') {
-          const prUrl = options.find((opt: any) => opt.name === 'pr_url')?.value;
-          
-          // Triage Input
-          const triage = triageInput(prUrl);
-          if (!triage.safe) {
-            return jsonResponse({
-              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-              data: { content: `⚠️ **Shield Alert:** ${triage.reason}` },
-            });
-          }
+        const commandEnv: CommandExecutionEnvironment = {
+          GITHUB_TOKEN: env.GITHUB_TOKEN,
+          SUPABASE_URL: env.SUPABASE_URL,
+          SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY,
+        };
+        const commandInteraction: DiscordInteraction = {
+          ...typedInteraction,
+          env: commandEnv,
+        };
 
-          const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-          if (!match) {
-            return jsonResponse({
-              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-              data: { content: '❌ Invalid GitHub PR URL.' },
-            });
-          }
-
-          const [_, owner, repo, pull_number] = match;
-
-          // Fetch Metadata & Diff
-          const [prRes, diffRes] = await Promise.all([
-            fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
-              headers: { 'Authorization': `Bearer ${env.GITHUB_TOKEN}`, 'User-Agent': 'Clanka-Discord', 'Accept': 'application/vnd.github.v3+json' }
-            }),
-            fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
-              headers: { 'Authorization': `Bearer ${env.GITHUB_TOKEN}`, 'User-Agent': 'Clanka-Discord', 'Accept': 'application/vnd.github.v3.diff' }
-            })
-          ]);
-
-          if (!prRes.ok) throw new Error(`GitHub API error: ${prRes.statusText}`);
-          
-          const prData: any = await prRes.json();
-          const diffText = diffRes.ok ? await diffRes.text() : '';
-          const analysis = analyzeDiff(diffText);
-
-          return jsonResponse({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { 
-              content: `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
-                       `**Title:** ${prData.title}\n` +
-                       `**Author:** ${prData.user.login}\n` +
-                       `**Diff:** +${prData.additions} / -${prData.deletions}\n\n` +
-                       `**${analysis.logicSummary}**`
-            },
-          });
-        }
-
-        // Command: /feedback
-        if (name === 'feedback') {
-          const limit = options?.find((opt: any) => opt.name === 'limit')?.value || 5;
-
-          const response = await fetch(`${env.SUPABASE_URL}/rest/v1/UserFeedback?select=*&order=created_at.desc&limit=${limit}`, {
-            headers: {
-              'apikey': env.SUPABASE_SERVICE_ROLE_KEY,
-              'Authorization': `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          });
-
-          if (!response.ok) {
-            throw new Error(`Supabase error: ${response.statusText}`);
-          }
-
-          const feedbackData: any[] = await response.json();
-
-          if (feedbackData.length === 0) {
-            return jsonResponse({
-              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-              data: { content: '📥 **Feedback Engine:** No recent user feedback found.' },
-            });
-          }
-
-          const feedbackList = feedbackData.map((f: any) => 
-            `• **[${f.category}]** ${f.message.substring(0, 100)}${f.message.length > 100 ? '...' : ''}\n  *Status: ${f.status} | Page: ${f.page_path || 'unknown'}*`
-          ).join('\n\n');
-
-          return jsonResponse({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: { 
-              content: `📥 **Latest User Feedback (Last ${feedbackData.length}):**\n\n${feedbackList}`
-            },
-          });
-        }
-
-        // Command: /help
-        if (name === 'help') {
-          return jsonResponse({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-              content:
-                `📘 **Clanka Commands**\n\n` +
-                `• \`/status\` - Check if Clanka is operational\n` +
-                `• \`/review pr_url\` - Run a heuristic code review on a GitHub PR\n` +
-                `• \`/feedback [limit]\` - Show recent user feedback from Supabase\n` +
-                `• \`/help\` - Show this help message`,
-            },
-          });
-        }
+        return jsonResponse(await handler(commandInteraction));
       }
 
-      return new Response('Unknown interaction', { status: 400 });
+      return jsonResponse({
+        type: 4,
+        data: { content: 'Unknown interaction' },
+      });
     } catch (err: any) {
       // Fail-safe: No stack traces leaked
       return jsonResponse({
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+        type: 4,
         data: { content: `❌ **System Error:** Internal failure during processing.` },
       });
     }
