@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { analyzeDiff } from "./spine";
+import { analyzeDiff, riskScore } from "./spine";
 
 const makeGitDiff = (files: { from: string; to: string; lines: string[] }[]) => {
   return files
@@ -118,5 +118,100 @@ describe("analyzeDiff — logicSummary", () => {
     expect(result.logicSummary).toContain("Industrial Minimalism");
     expect(result.logicSummary).toContain("modified-files=1");
     expect(result.logicSummary).toContain("new-exports=1");
+  });
+});
+
+describe("riskScore", () => {
+  it("returns 0 for empty diff", () => {
+    expect(riskScore("")).toBe(0);
+    expect(riskScore(" \n\t")).toBe(0);
+  });
+
+  it("increases as changed lines increase", () => {
+    const small = makeGitDiff([
+      { from: "src/a.ts", to: "src/a.ts", lines: ["+const a = 1;", "-const a = 0;"] },
+    ]);
+    const large = makeGitDiff([
+      {
+        from: "src/a.ts",
+        to: "src/a.ts",
+        lines: Array.from({ length: 40 }, (_, i) => `+const v${i} = ${i};`),
+      },
+    ]);
+
+    expect(riskScore(large)).toBeGreaterThan(riskScore(small));
+  });
+
+  it("increases as files touched increase", () => {
+    const oneFile = makeGitDiff([
+      { from: "src/a.ts", to: "src/a.ts", lines: ["+const a = 1;"] },
+    ]);
+    const threeFiles = makeGitDiff([
+      { from: "src/a.ts", to: "src/a.ts", lines: ["+const a = 1;"] },
+      { from: "src/b.ts", to: "src/b.ts", lines: ["+const b = 2;"] },
+      { from: "src/c.ts", to: "src/c.ts", lines: ["+const c = 3;"] },
+    ]);
+
+    expect(riskScore(threeFiles)).toBeGreaterThan(riskScore(oneFile));
+  });
+
+  it("reduces score when src changes include corresponding tests", () => {
+    const srcOnly = makeGitDiff([
+      {
+        from: "src/logic.ts",
+        to: "src/logic.ts",
+        lines: [
+          "+export const run = () => true;",
+          "+const a = 1;",
+          "-const a = 0;",
+          "+const b = 2;",
+          "-const b = 1;",
+        ],
+      },
+    ]);
+    const srcWithTest = makeGitDiff([
+      {
+        from: "src/logic.ts",
+        to: "src/logic.ts",
+        lines: ["+export const run = () => true;", "+const a = 1;", "-const a = 0;"],
+      },
+      {
+        from: "src/logic.test.ts",
+        to: "src/logic.test.ts",
+        lines: ["+import { run } from './logic';", "+it('runs', () => expect(run()).toBe(true));"],
+      },
+    ]);
+
+    expect(riskScore(srcWithTest)).toBeLessThan(riskScore(srcOnly));
+  });
+
+  it("scores src changes higher than config-only changes", () => {
+    const srcChange = makeGitDiff([
+      { from: "src/core.ts", to: "src/core.ts", lines: ["+export const core = 1;", "-export const core = 0;"] },
+    ]);
+    const configChange = makeGitDiff([
+      { from: "package.json", to: "package.json", lines: ['+"type": "module"', '-"type": "commonjs"'] },
+    ]);
+
+    expect(riskScore(srcChange)).toBeGreaterThan(riskScore(configChange));
+  });
+
+  it("keeps score within 0-100", () => {
+    const huge = makeGitDiff([
+      {
+        from: "src/huge.ts",
+        to: "src/huge.ts",
+        lines: Array.from({ length: 1000 }, (_, i) => `+const n${i} = ${i};`),
+      },
+      {
+        from: "package.json",
+        to: "package.json",
+        lines: Array.from({ length: 300 }, (_, i) => `+"k${i}": ${i},`),
+      },
+    ]);
+
+    const score = riskScore(huge);
+    expect(score).toBeGreaterThanOrEqual(0);
+    expect(score).toBeLessThanOrEqual(100);
   });
 });
