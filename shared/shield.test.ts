@@ -5,6 +5,13 @@ describe("SHIELD_PATTERNS", () => {
   it("has at least 10 patterns", () => {
     expect(SHIELD_PATTERNS.length).toBeGreaterThanOrEqual(10);
   });
+
+  it("uses { pattern, reason } entries", () => {
+    for (const entry of SHIELD_PATTERNS) {
+      expect(entry.pattern).toBeInstanceOf(RegExp);
+      expect(entry.reason.length).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe("triageInput — blocked patterns", () => {
@@ -20,6 +27,16 @@ describe("triageInput — blocked patterns", () => {
     "<script>alert(1)</script>",
     'href="javascript:void(0)"',
     "data:text/html,<h1>hack</h1>",
+    "const x = atob(payload)",
+    "[click me](javascript:alert(1))",
+    String.raw`payload\\x00injection`,
+    "name=test%00admin",
+    "fetch('file:///etc/passwd')",
+    "http://localhost:8080/private",
+    "http://127.0.0.1:3000/internal",
+    "http://169.254.169.254/latest/meta-data",
+    "http://metadata.google.internal/computeMetadata/v1/",
+    "http://metadata.azure.com/metadata/instance",
   ];
 
   for (const input of injectionInputs) {
@@ -61,6 +78,37 @@ describe("triageInput — control character guard", () => {
   it("allows tab and newline (printable whitespace)", () => {
     const result = triageInput("hello\tworld\nnewline");
     expect(result.safe).toBe(true);
+  });
+});
+
+describe("triageInput — new pattern coverage", () => {
+  it("blocks base64-decoder helper patterns", () => {
+    expect(triageInput("const raw = atob(token);").safe).toBe(false);
+  });
+
+  it("blocks markdown javascript links", () => {
+    expect(triageInput("[open](javascript:alert('x'))").safe).toBe(false);
+  });
+
+  it("blocks encoded null-byte forms", () => {
+    expect(triageInput(String.raw`abc\\x00def`).safe).toBe(false);
+    expect(triageInput("abc%00def").safe).toBe(false);
+  });
+
+  it("blocks SSRF-adjacent local/metadata targets", () => {
+    const probes = [
+      "file:///etc/passwd",
+      "http://localhost/admin",
+      "http://127.0.0.1:9000/",
+      "http://169.254.170.2/v2/credentials",
+      "http://169.254.169.254/latest/meta-data",
+      "http://metadata.google.internal/computeMetadata/v1/",
+      "http://metadata.azure.com/metadata/instance",
+    ];
+
+    for (const probe of probes) {
+      expect(triageInput(probe).safe).toBe(false);
+    }
   });
 });
 

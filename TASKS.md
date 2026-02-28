@@ -8,7 +8,7 @@
 
 ## 🟡 Medium Priority
 - [x] **Add root `package.json`** — done, with vitest workspace config (2026-02-26)
-- [ ] **`shared/shield.ts` — expand patterns** — add patterns for: base64-encoded injections, markdown link exploits (`[click me](javascript:...)`), null bytes, SSRF-adjacent patterns (`file://`, `localhost`, `169.254.`).
+- [x] **`shared/shield.ts` — expand patterns** — added base64, markdown javascript links, encoded null bytes, and SSRF-adjacent target detection with tests (2026-02-28).
 - [x] **Add CI workflow** — GitHub Actions CI (lint + test) added and passing (2026-02-26)
 - [x] **`shared/` — add index.ts barrel export** — currently consumers import directly from `shield.ts` / `spine.ts`. Add `shared/index.ts` re-exporting both for cleaner consumption.
 
