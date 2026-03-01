@@ -29,6 +29,10 @@ const COMMANDS = [
         required: false,
       },
     ],
+  },
+  {
+    name: 'help',
+    description: 'Show available commands',
   }
 ];
 
