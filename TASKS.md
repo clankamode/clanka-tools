@@ -20,15 +20,15 @@
   - Added `workers/clanka-discord/commands/registry.test.ts` coverage for `validatePrUrl` valid/non-GitHub/missing-PR cases and command option parsing for `/review`, `/scan`, and unknown command errors.
 - [x] **Surface risk summary in `/review` response using existing `riskScore`** (2026-03-01)
   - `commandReview` now computes `riskScore(diffText)`, builds `riskSummary`, and returns it in the response payload with risk details in the Discord message.
-- [ ] **Introduce a runtime command schema for `workers/clanka-discord/commands/registry.ts`**
-  - Replace the inline `commandRegistry` map with a typed schema carrying name, description, handler, and option definitions so command registration and runtime dispatch share the same source of truth.
-- [ ] **Make worker build script cross-platform**
-  - Replace `workers/clanka-discord/package.json` `build` script’s macOS-only `sed -i ''` usage with a portable transformation step so Linux CI/dev environments can build reliably.
-- [ ] **Add documentation for production env wiring and required tokens/secrets**
-  - Create a docs page that explicitly lists `DISCORD_PUBLIC_KEY`, `DISCORD_APPLICATION_ID`, `CLANKA_ADMIN_IDS`, `GITHUB_TOKEN`, `SUPABASE_*`, and local/Cloudflare configuration expectations.
+- [x] **Introduce a runtime command schema for `workers/clanka-discord/commands/registry.ts`** (2026-03-01)
+  - Added typed runtime command schema entries with `name`, `description`, `handler`, and option definitions; runtime dispatch now resolves commands via schema lookup helpers.
+- [x] **Make worker build script cross-platform** (2026-03-01)
+  - Replaced macOS-specific shell script build flow with `workers/clanka-discord/scripts/build.mjs` and updated the package build script to use Node-based file copy/rewrite logic.
+- [x] **Add documentation for production env wiring and required tokens/secrets** (2026-03-01)
+  - Added `workers/clanka-discord/README.md` with required production secrets/vars, Cloudflare wiring, and local/deploy command flow.
 
 ## 🟢 Low Priority / Nice to Have
-- [ ] **`workers/clanka-discord` — add command registry** — current Discord handler likely handles one or few slash commands. Add a typed command registry so adding new commands is a one-liner.
+- [x] **`workers/clanka-discord` — add command registry** — typed runtime command schema and name-based lookup helpers added for dispatch/metadata reuse (2026-03-01).
 - [x] **`shared/spine.ts` — risk scoring** — `riskScore(diff)` added and exported, with tests covering lines changed, files touched, test ratio, src/config weighting, and 0–100 bounds (2026-02-28).
 - [ ] **`docs/` — add architecture diagram** — show how `shield.ts` and `spine.ts` are used by the Discord worker and any other consumers.
 - [ ] **Add `workers/clanka-discord` tests for command handlers**

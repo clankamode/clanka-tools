@@ -40,6 +40,20 @@ export type DiscordCommandHandler = (
   interaction: DiscordInteraction
 ) => Promise<DiscordResponse>;
 
+export interface DiscordSlashCommandOption {
+  type: 3 | 4;
+  name: string;
+  description: string;
+  required?: boolean;
+}
+
+export interface RuntimeCommandSchema<Name extends string = string> {
+  name: Name;
+  description: string;
+  handler: DiscordCommandHandler;
+  options?: ReadonlyArray<DiscordSlashCommandOption>;
+}
+
 export interface RiskSummary {
   score: number;
   level: 'low' | 'medium' | 'high';
@@ -393,9 +407,64 @@ const commandHelp: DiscordCommandHandler = async () => {
   );
 };
 
-export const commandRegistry: Record<string, DiscordCommandHandler> = {
-  status: commandStatus,
-  review: commandReview,
-  feedback: commandFeedback,
-  help: commandHelp,
-};
+const runtimeCommandRegistry = [
+  {
+    name: 'status',
+    description: 'Check Clanka system status',
+    handler: commandStatus,
+  },
+  {
+    name: 'review',
+    description: 'Get a summary of a GitHub PR',
+    handler: commandReview,
+    options: [
+      {
+        type: 3,
+        name: 'pr_url',
+        description: 'The URL of the GitHub PR',
+        required: true,
+      },
+    ],
+  },
+  {
+    name: 'feedback',
+    description: 'Check latest user feedback entries',
+    handler: commandFeedback,
+    options: [
+      {
+        type: 4,
+        name: 'limit',
+        description: 'Number of entries to fetch (default 5)',
+        required: false,
+      },
+    ],
+  },
+  {
+    name: 'help',
+    description: 'Show available commands',
+    handler: commandHelp,
+  },
+] as const;
+
+export type RuntimeCommandName = (typeof runtimeCommandRegistry)[number]['name'];
+
+export const commandRegistry: ReadonlyArray<RuntimeCommandSchema<RuntimeCommandName>> =
+  runtimeCommandRegistry;
+
+const commandRegistryByName: Map<RuntimeCommandName, RuntimeCommandSchema<RuntimeCommandName>> =
+  new Map(commandRegistry.map((command) => [command.name, command]));
+
+export function getCommandSchema(
+  commandName: string | undefined
+): RuntimeCommandSchema<RuntimeCommandName> | undefined {
+  if (!commandName) {
+    return undefined;
+  }
+  return commandRegistryByName.get(commandName as RuntimeCommandName);
+}
+
+export function getCommandHandler(
+  commandName: string | undefined
+): DiscordCommandHandler | undefined {
+  return getCommandSchema(commandName)?.handler;
+}

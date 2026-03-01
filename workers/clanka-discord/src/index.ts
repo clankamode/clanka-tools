@@ -3,7 +3,7 @@ import {
   verifyKey,
 } from 'discord-interactions';
 import {
-  commandRegistry,
+  getCommandSchema,
   type CommandExecutionEnvironment,
   type DiscordInteraction,
   type DiscordResponse,
@@ -70,9 +70,9 @@ export default {
 
       if (interaction.type === InteractionType.APPLICATION_COMMAND) {
         const name = interaction.data?.name;
-        const handler = name ? commandRegistry[name] : undefined;
+        const command = getCommandSchema(name);
 
-        if (!handler) {
+        if (!command) {
           return new Response('Unknown command', { status: 400 });
         }
 
@@ -86,7 +86,7 @@ export default {
           env: commandEnv,
         };
 
-        return jsonResponse(await handler(commandInteraction));
+        return jsonResponse(await command.handler(commandInteraction));
       }
 
       return jsonResponse({

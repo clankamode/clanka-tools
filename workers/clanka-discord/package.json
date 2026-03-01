@@ -6,7 +6,7 @@
   "scripts": {
     "deploy": "wrangler deploy",
     "register": "node scripts/register.js",
-    "build": "mkdir -p dist && cp -r src/* dist/ && cp ../../shared/*.ts dist/ && sed -i '' 's|../../shared/|./|g' dist/index.ts"
+    "build": "node scripts/build.mjs"
   },
   "keywords": [],
   "author": "",
