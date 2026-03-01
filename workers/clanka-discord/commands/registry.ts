@@ -44,6 +44,19 @@ const response = (content: string): DiscordResponse => ({
   data: { content },
 });
 
+const asString = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : fallback;
+
+const asObject = (
+  value: unknown
+): Record<string, unknown> | undefined =>
+  typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
+
+const serviceUnavailable = (service: string): DiscordResponse =>
+  response(
+    `⚠️ **${service} service is temporarily unavailable.** Please try again shortly.`
+  );
+
 const findOption = (
   interaction: DiscordInteraction,
   name: string
@@ -56,113 +69,150 @@ const commandStatus: DiscordCommandHandler = async () => {
 };
 
 const commandReview: DiscordCommandHandler = async (interaction) => {
-  const prUrl = findOption(interaction, 'pr_url');
-  if (!prUrl || typeof prUrl !== 'string') {
-    return response('❌ Missing or invalid `pr_url` argument.');
+  try {
+    const prUrl = findOption(interaction, 'pr_url');
+    if (!prUrl || typeof prUrl !== 'string') {
+      return response('❌ Missing or invalid `pr_url` argument.');
+    }
+
+    const triage = triageInput(prUrl);
+    if (!triage.safe) {
+      return response(`⚠️ **Shield Alert:** ${triage.reason}`);
+    }
+
+    const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+    if (!match) {
+      return response('❌ Invalid GitHub PR URL.');
+    }
+
+    const [, owner, repo, pull_number] = match;
+    const authHeaders = {
+      Authorization: `Bearer ${interaction.env?.GITHUB_TOKEN}`,
+      'User-Agent': 'Clanka-Discord',
+      Accept: 'application/vnd.github.v3+json',
+    };
+
+    let prRes: Response;
+    let diffRes: Response;
+    try {
+      [prRes, diffRes] = await Promise.all([
+        fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
+          headers: authHeaders,
+        }),
+        fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
+          headers: {
+            Authorization: `Bearer ${interaction.env?.GITHUB_TOKEN}`,
+            'User-Agent': 'Clanka-Discord',
+            Accept: 'application/vnd.github.v3.diff',
+          },
+        }),
+      ]);
+    } catch {
+      return serviceUnavailable('PR Review');
+    }
+
+    if (!prRes.ok) {
+      return serviceUnavailable('PR Review');
+    }
+
+    let prData: Record<string, unknown>;
+    try {
+      const rawPrData = (await prRes.json()) as Record<string, unknown>;
+      prData = asObject(rawPrData) ?? {};
+    } catch {
+      return serviceUnavailable('PR Review');
+    }
+
+    let diffText = '';
+    if (diffRes.ok) {
+      try {
+        diffText = await diffRes.text();
+      } catch {
+        return serviceUnavailable('PR Review');
+      }
+    }
+    const analysis = analyzeDiff(diffText);
+
+    const user = asObject(prData.user) ?? {};
+    const author = asString(user.login);
+    const title = asString(prData.title, 'Untitled');
+    const additions = Number(prData.additions) || 0;
+    const deletions = Number(prData.deletions) || 0;
+
+    return response(
+      `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
+        `**Title:** ${title}\n` +
+        `**Author:** ${author}\n` +
+        `**Diff:** +${additions} / -${deletions}\n\n` +
+        `**${analysis.logicSummary}**`
+    );
+  } catch {
+    return serviceUnavailable('PR Review');
   }
-
-  const triage = triageInput(prUrl);
-  if (!triage.safe) {
-    return response(`⚠️ **Shield Alert:** ${triage.reason}`);
-  }
-
-  const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-  if (!match) {
-    return response('❌ Invalid GitHub PR URL.');
-  }
-
-  const [, owner, repo, pull_number] = match;
-  const authHeaders = {
-    Authorization: `Bearer ${interaction.env?.GITHUB_TOKEN}`,
-    'User-Agent': 'Clanka-Discord',
-    Accept: 'application/vnd.github.v3+json',
-  };
-
-  const [prRes, diffRes] = await Promise.all([
-    fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
-      headers: authHeaders,
-    }),
-    fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
-      headers: {
-        Authorization: `Bearer ${interaction.env?.GITHUB_TOKEN}`,
-        'User-Agent': 'Clanka-Discord',
-        Accept: 'application/vnd.github.v3.diff',
-      },
-    }),
-  ]);
-
-  if (!prRes.ok) {
-    throw new Error(`GitHub API error: ${prRes.statusText}`);
-  }
-
-  const prData = (await prRes.json()) as {
-    title: string;
-    user: { login: string };
-    additions: number;
-    deletions: number;
-  };
-  const diffText = diffRes.ok ? await diffRes.text() : '';
-  const analysis = analyzeDiff(diffText);
-
-  return response(
-    `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
-      `**Title:** ${prData.title}\n` +
-      `**Author:** ${prData.user.login}\n` +
-      `**Diff:** +${prData.additions} / -${prData.deletions}\n\n` +
-      `**${analysis.logicSummary}**`
-  );
 };
 
 const commandFeedback: DiscordCommandHandler = async (interaction) => {
-  const requestedLimit =
-    findOption(interaction, 'limit') ?? 5;
-  const parsedLimit = Number(requestedLimit);
-  const limit =
-    Number.isFinite(parsedLimit) && parsedLimit > 0
-      ? Math.floor(parsedLimit)
-      : 5;
+  try {
+    const requestedLimit =
+      findOption(interaction, 'limit') ?? 5;
+    const parsedLimit = Number(requestedLimit);
+    const limit =
+      Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.floor(parsedLimit)
+        : 5;
 
-  const responsePayload = await fetch(
-    `${interaction.env?.SUPABASE_URL}/rest/v1/UserFeedback?select=*&order=created_at.desc&limit=${limit}`,
-    {
-      headers: {
-        apikey: interaction.env?.SUPABASE_SERVICE_ROLE_KEY ?? '',
-        Authorization: `Bearer ${interaction.env?.SUPABASE_SERVICE_ROLE_KEY ?? ''}`,
-        'Content-Type': 'application/json',
-      },
+    let responsePayload: Response;
+    try {
+      responsePayload = await fetch(
+        `${interaction.env?.SUPABASE_URL}/rest/v1/UserFeedback?select=*&order=created_at.desc&limit=${limit}`,
+        {
+          headers: {
+            apikey: interaction.env?.SUPABASE_SERVICE_ROLE_KEY ?? '',
+            Authorization: `Bearer ${interaction.env?.SUPABASE_SERVICE_ROLE_KEY ?? ''}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+    } catch {
+      return serviceUnavailable('Feedback');
     }
-  );
 
-  if (!responsePayload.ok) {
-    throw new Error(`Supabase error: ${responsePayload.statusText}`);
+    if (!responsePayload.ok) {
+      return serviceUnavailable('Feedback');
+    }
+
+    let feedbackData: Array<Record<string, unknown>>;
+    try {
+      const payload = (await responsePayload.json()) as unknown;
+      feedbackData = Array.isArray(payload) ? (payload as Array<Record<string, unknown>>) : [];
+    } catch {
+      return serviceUnavailable('Feedback');
+    }
+
+    if (feedbackData.length === 0) {
+      return response('📥 **Feedback Engine:** No recent user feedback found.');
+    }
+
+    const feedbackList = feedbackData
+      .map(
+        (feedback) =>
+          `• **[${asString(feedback.category, 'Uncategorized')}]** ${asString(
+            feedback.message,
+            'No message content'
+          ).substring(0, 100)}${
+            asString(feedback.message, 'No message content').length > 100 ? '...' : ''
+          }\n  *Status: ${asString(feedback.status, 'unknown')} | Page: ${
+            asString(feedback.page_path, 'unknown')
+          }*`
+      )
+      .join('\n\n');
+
+    return response(
+      `📥 **Latest User Feedback (Last ${feedbackData.length}):**\n\n${feedbackList}`
+    );
+  } catch {
+    return serviceUnavailable('Feedback');
   }
-
-  const feedbackData = (await responsePayload.json()) as Array<{
-    category: string;
-    message: string;
-    status: string;
-    page_path?: string;
-  }>;
-
-  if (feedbackData.length === 0) {
-    return response('📥 **Feedback Engine:** No recent user feedback found.');
-  }
-
-  const feedbackList = feedbackData
-    .map(
-      (feedback) =>
-        `• **[${feedback.category}]** ${feedback.message.substring(
-          0,
-          100
-        )}${feedback.message.length > 100 ? '...' : ''}\n  *Status: ${feedback.status} | Page: ${
-          feedback.page_path || 'unknown'
-        }*`
-    )
-    .join('\n\n');
-
-  return response(
-    `📥 **Latest User Feedback (Last ${feedbackData.length}):**\n\n${feedbackList}`
-  );
 };
 
 const commandHelp: DiscordCommandHandler = async () => {

@@ -111,6 +111,51 @@ describe("analyzeDiff — large diff", () => {
   });
 });
 
+describe("analyzeDiff — real unified diff", () => {
+  it("counts exports and modified file from a realistic mixed hunk", () => {
+    const diff = [
+      "diff --git a/src/format.ts b/src/format.ts",
+      "index 8f7a2d..c3e8b5 100644",
+      "--- a/src/format.ts",
+      "+++ b/src/format.ts",
+      "@@ -1,7 +1,8 @@",
+      " export const trim = (value: string) => value.trim();",
+      "-export const format = (value: string) => value;",
+      "+export const format = (value: string) => value.trim();",
+      " const debug = true;",
+      "+const local = format('x');",
+      "+export function toUpper(value: string): string {",
+      "+  return value.toUpperCase();",
+      "+}",
+    ].join("\n");
+
+    const result = analyzeDiff(diff);
+    expect(result.modifiedFiles).toContain("src/format.ts");
+    expect(result.newExports).toBe(2);
+  });
+});
+
+describe("analyzeDiff — rename diff", () => {
+  it("tracks renamed file target path from diff header", () => {
+    const diff = [
+      "diff --git a/src/legacy.ts b/src/core/legacy.ts",
+      "similarity index 100%",
+      "rename from src/legacy.ts",
+      "rename to src/core/legacy.ts",
+      "--- a/src/legacy.ts",
+      "+++ b/src/core/legacy.ts",
+      "@@ -1,2 +1,2 @@",
+      "-export const legacy = 1;",
+      "+export const legacy = 2;",
+    ].join("\n");
+
+    const result = analyzeDiff(diff);
+    expect(result.modifiedFiles).toContain("src/core/legacy.ts");
+    expect(result.modifiedFiles).toHaveLength(1);
+    expect(result.newExports).toBe(1);
+  });
+});
+
 describe("analyzeDiff — logicSummary", () => {
   it("includes Industrial Minimalism header in summary", () => {
     const diff = makeGitDiff([{ from: "src/x.ts", to: "src/x.ts", lines: ["+export const x = 1;"] }]);
