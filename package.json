@@ -9,7 +9,7 @@
     "build": "cd workers/clanka-discord && npm run build"
   },
   "devDependencies": {
-    "vitest": "^1.6.0",
+    "vitest": "^4.0.18",
     "typescript": "^5.4.0"
   },
   "workspaces": [
