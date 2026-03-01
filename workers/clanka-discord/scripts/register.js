@@ -1,6 +1,3 @@
-const APPLICATION_ID = process.env.DISCORD_APPLICATION_ID;
-const TOKEN = process.env.DISCORD_TOKEN;
-
 const COMMANDS = [
   {
     name: 'status',
@@ -36,32 +33,135 @@ const COMMANDS = [
   }
 ];
 
-async function register() {
-  if (!APPLICATION_ID || !TOKEN) {
-    console.error('Missing DISCORD_APPLICATION_ID or DISCORD_TOKEN');
-    process.exit(1);
+function parseCliArgs(argv = process.argv.slice(2)) {
+  return {
+    json: argv.includes('--json'),
+    help: argv.includes('--help') || argv.includes('-h'),
+  };
+}
+
+function printJson(log, payload) {
+  log(JSON.stringify(payload, null, 2));
+}
+
+async function registerCommands({
+  applicationId = process.env.DISCORD_APPLICATION_ID,
+  token = process.env.DISCORD_TOKEN,
+  fetchImpl = fetch,
+  log = console.log,
+  errorLog = console.error,
+  argv = process.argv.slice(2),
+} = {}) {
+  const flags = parseCliArgs(argv);
+
+  if (flags.help) {
+    const usage = 'Usage: node scripts/register.js [--json]';
+    if (flags.json) {
+      printJson(log, {
+        ok: true,
+        usage,
+        options: ['--json', '--help'],
+        commands: COMMANDS.map((command) => command.name),
+      });
+    } else {
+      log(usage);
+      log('Options:');
+      log('  --json   Output machine-readable JSON result');
+      log('  --help   Show this help');
+    }
+    return { ok: true, help: true };
   }
 
-  const url = `https://discord.com/api/v10/applications/${APPLICATION_ID}/commands`;
+  if (!applicationId || !token) {
+    const error = 'Missing DISCORD_APPLICATION_ID or DISCORD_TOKEN';
+    if (flags.json) {
+      printJson(log, { ok: false, error });
+    } else {
+      errorLog(error);
+    }
+    return { ok: false, error };
+  }
 
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bot ${TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(COMMANDS),
-  });
+  const url = `https://discord.com/api/v10/applications/${applicationId}/commands`;
+
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bot ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(COMMANDS),
+    });
+  } catch (err) {
+    const error =
+      err instanceof Error ? err.message : 'Network error during command registration';
+    if (flags.json) {
+      printJson(log, { ok: false, error });
+    } else {
+      errorLog('Error registering commands');
+      errorLog(error);
+    }
+    return { ok: false, error };
+  }
 
   if (response.ok) {
-    console.log('Successfully registered commands');
-    const data = await response.json();
-    console.log(JSON.stringify(data, null, 2));
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+
+    if (flags.json) {
+      printJson(log, {
+        ok: true,
+        commandCount: COMMANDS.length,
+        data,
+      });
+    } else {
+      log('Successfully registered commands');
+      log(JSON.stringify(data, null, 2));
+    }
+
+    return { ok: true, data };
+  }
+
+  let error = 'Error registering commands';
+  try {
+    const text = await response.text();
+    if (text) {
+      error = text;
+    }
+  } catch {
+    // Keep default error
+  }
+
+  if (flags.json) {
+    printJson(log, { ok: false, status: response.status, error });
   } else {
-    console.error('Error registering commands');
-    const error = await response.text();
-    console.error(error);
+    errorLog('Error registering commands');
+    errorLog(error);
+  }
+
+  return { ok: false, status: response.status, error };
+}
+
+async function main(argv = process.argv.slice(2)) {
+  const result = await registerCommands({ argv });
+  if (!result.ok) {
+    process.exitCode = 1;
   }
 }
 
-register();
+if (require.main === module) {
+  void main();
+}
+
+module.exports = {
+  COMMANDS,
+  parseCliArgs,
+  registerCommands,
+  main,
+};

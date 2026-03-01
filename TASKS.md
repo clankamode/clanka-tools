@@ -1,5 +1,5 @@
 # TASKS.md — clanka-tools
-> Last updated: 2026-02-28 | Status: open
+> Last updated: 2026-03-01 | Status: open
 
 ## 🔴 High Priority
 - [x] **Add tests for `shared/shield.ts`** — 27 tests written and passing (2026-02-26)
@@ -30,16 +30,17 @@
 ## 🟢 Low Priority / Nice to Have
 - [x] **`workers/clanka-discord` — add command registry** — typed runtime command schema and name-based lookup helpers added for dispatch/metadata reuse (2026-03-01).
 - [x] **`shared/spine.ts` — risk scoring** — `riskScore(diff)` added and exported, with tests covering lines changed, files touched, test ratio, src/config weighting, and 0–100 bounds (2026-02-28).
-- [ ] **`docs/` — add architecture diagram** — show how `shield.ts` and `spine.ts` are used by the Discord worker and any other consumers.
-- [ ] **Add `workers/clanka-discord` tests for command handlers**
-  - New `workers/clanka-discord/commands/registry.test.ts` covering `/status`, `/help`, and happy-path `/review`/`/feedback` response formatting with mocked fetch.
+- [x] **`docs/` — add architecture diagram** (2026-03-01)
+  - Added `docs/architecture.md` with ASCII diagrams showing `shield.ts` and `spine.ts` flow through the Discord worker and shared consumers.
+- [x] **Add `workers/clanka-discord` tests for command handlers** (2026-03-01)
+  - Added `workers/clanka-discord/commands/handlers.test.ts` covering `/status`, `/help`, `/review`, and `/feedback` with mocked Discord interaction objects and mocked fetch responses.
 - [ ] **Add explicit admin-id sanitization and diagnostics for `CLANKA_ADMIN_IDS`**
   - Trim/deduplicate IDs during parse and return a diagnostic deny message when the allowlist is empty or malformed instead of silently allowing broad access patterns.
 - [ ] **Add a lightweight docs/ADR for error handling policy**
   - Document how each command handles malformed input, upstream API failures, and timeout behavior so future contributors extend behavior consistently.
 
 ## 🧠 Notes
-- No root `package.json` — run commands inside `workers/clanka-discord/`
+- Root `package.json` exists and runs workspace build/test commands
 - `shared/shield.ts`: prompt injection / DoS guard — `triageInput(input): { safe, reason }`
 - `shared/spine.ts`: diff structure analysis — `analyzeDiff(diff): DiffInfo`
 - `workers/clanka-discord/`: Cloudflare Worker handling Discord interactions

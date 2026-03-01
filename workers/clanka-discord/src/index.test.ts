@@ -77,6 +77,21 @@ describe("workers/clanka-discord index request handling", () => {
     expect(await response.text()).toBe("Bad request signature");
   });
 
+  it("returns Discord PONG for interaction PING requests", async () => {
+    vi.mocked(verifyKey).mockReturnValue(true);
+
+    const response = await worker.fetch(
+      makeInteractionRequest({
+        type: 1,
+      }),
+      env as never
+    );
+    const payload = (await response.json()) as { type: number };
+
+    expect(response.status).toBe(200);
+    expect(payload.type).toBe(1);
+  });
+
   it("returns access denied JSON for unauthorized user", async () => {
     vi.mocked(verifyKey).mockReturnValue(true);
 
@@ -108,6 +123,40 @@ describe("workers/clanka-discord index request handling", () => {
 
     expect(response.status).toBe(400);
     expect(await response.text()).toBe("Unknown command");
+  });
+
+  it("dispatches /status for authorized users", async () => {
+    vi.mocked(verifyKey).mockReturnValue(true);
+
+    const response = await worker.fetch(
+      makeInteractionRequest({
+        type: 2,
+        data: { name: "status" },
+        member: { user: { id: "authorized-user" } },
+      }),
+      env as never
+    );
+    const payload = (await response.json()) as { data: { content: string } };
+
+    expect(response.status).toBe(200);
+    expect(payload.data.content).toContain("CLANKA: Operational");
+  });
+
+  it("dispatches /help for authorized users", async () => {
+    vi.mocked(verifyKey).mockReturnValue(true);
+
+    const response = await worker.fetch(
+      makeInteractionRequest({
+        type: 2,
+        data: { name: "help" },
+        member: { user: { id: "authorized-user" } },
+      }),
+      env as never
+    );
+    const payload = (await response.json()) as { data: { content: string } };
+
+    expect(response.status).toBe(200);
+    expect(payload.data.content).toContain("/review pr_url");
   });
 
   it("returns a stable error response when /review fetches fail", async () => {
