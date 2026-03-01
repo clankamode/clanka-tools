@@ -1,50 +1,69 @@
-# Clanka Discord Worker Architecture
+# Clanka Tools Architecture
 
-`workers/clanka-discord` is a Cloudflare Worker that receives Discord interactions, validates request signatures, performs admin gating, then routes slash commands through a typed command registry.
+This repository has two core shared modules:
 
-## Dataflow
+- `shared/shield.ts` for inbound input triage (`triageInput`)
+- `shared/spine.ts` for diff structure + risk analysis (`analyzeDiff`, `riskScore`)
 
-```
-+----------------+
-| Discord Client |
-+----------------+
+`workers/clanka-discord` uses both modules in the `/review` command handler to block unsafe input before fetches and to summarize PR diffs after fetches.
+
+## Runtime Flow (Discord Worker)
+
+```text
+Discord Slash Command
         |
         v
-+------------------------------+
-| Worker.fetch (index.ts)      |
-| - verifyKey                  |
-| - PING -> PONG               |
-| - Admin lock (CLANKA_ADMIN_IDS)|
-+------------------------------+
++----------------------------------+
+| workers/clanka-discord/src/index |
+| - verify Discord signature       |
+| - admin gate                     |
+| - route command via registry     |
++----------------------------------+
         |
         v
-+------------------------------+
-| Command Registry             |
-| workers/clanka-discord/...    |
-| - status                    |
-| - review                    |
-| - feedback                  |
-| - help                      |
-+------------------------------+
-        |
-        |--------+-------------------------+
-        |        |                         |
-        |        v                         v
-+--------------------+          +----------------------+
-| shared/shield.ts    |          | shared/spine.ts        |
-| triageInput()       |          | analyzeDiff()          |
-| PR URL safety gate   |          | diff metrics summary    |
-+--------------------+          +----------------------+
-        |                             |
-        +-------------+---------------+
-                      |
-                      v
-           +----------------------+
-           | Discord Interaction   |
-           | Response (JSON)       |
-           +----------------------+
++--------------------------------------+
+| workers/clanka-discord/commands/*    |
+| commandRegistry.review                |
++--------------------------------------+
+        |                        |
+        | 1) triage PR URL       | 2) analyze PR diff
+        v                        v
++----------------------+   +----------------------+
+| shared/shield.ts     |   | shared/spine.ts      |
+| triageInput(pr_url)  |   | analyzeDiff(diff)    |
+| blocks risky input   |   | riskScore(diff)      |
++----------------------+   +----------------------+
+        |                        |
+        +-----------+------------+
+                    |
+                    v
+        DiscordResponse JSON payload
 ```
 
-- `shared/shield.ts` protects user-supplied PR URLs before any network calls.
-- `shared/spine.ts` analyzes raw PR diff text and contributes the final logic summary.
-- The registry returns typed `DiscordResponse` objects that are JSON-serialized by the worker.
+## Shared Consumer Model
+
+The shared modules are not worker-specific and can be consumed by any package in this repo through direct imports or the shared barrel export (`shared/index.ts`).
+
+```text
++------------------+      +----------------------+
+| Consumer A       |      | Consumer B           |
+| Discord Worker   |      | Future CLI/Worker    |
++--------+---------+      +----------+-----------+
+         |                           |
+         +-------------+-------------+
+                       |
+                       v
+               +---------------+
+               | shared/index  |
+               | re-exports:   |
+               | - triageInput |
+               | - analyzeDiff |
+               | - riskScore   |
+               +---------------+
+```
+
+## Current Coupling Rules
+
+- `triageInput()` is a pre-network guard in `/review`.
+- `analyzeDiff()` and `riskScore()` are post-fetch diff analyzers in `/review`.
+- Worker request validation and admin authorization stay in `src/index.ts`; command logic stays in `commands/registry.ts`.
