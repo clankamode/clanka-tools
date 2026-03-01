@@ -1,4 +1,4 @@
-import { analyzeDiff } from '../../../shared/spine';
+import { analyzeDiff, riskScore } from '../../../shared/spine';
 import { triageInput } from '../../../shared/shield';
 
 export interface DiscordInteractionOption {
@@ -32,6 +32,7 @@ export interface DiscordResponse {
   type: 4 | 1;
   data?: {
     content: string;
+    riskSummary?: RiskSummary;
   };
 }
 
@@ -39,9 +40,39 @@ export type DiscordCommandHandler = (
   interaction: DiscordInteraction
 ) => Promise<DiscordResponse>;
 
-const response = (content: string): DiscordResponse => ({
+export interface RiskSummary {
+  score: number;
+  level: 'low' | 'medium' | 'high';
+  reasons: string[];
+}
+
+export interface PrUrlValidationResult {
+  valid: boolean;
+  error?: string;
+}
+
+export type ParsedCommandOptions =
+  | {
+      valid: true;
+      command: 'review';
+      args: { pr_url: string };
+    }
+  | {
+      valid: true;
+      command: 'scan';
+      args: { repo: string };
+    }
+  | {
+      valid: false;
+      error: string;
+    };
+
+const response = (
+  content: string,
+  extraData?: Omit<NonNullable<DiscordResponse['data']>, 'content'>
+): DiscordResponse => ({
   type: 4,
-  data: { content },
+  data: { content, ...(extraData ?? {}) },
 });
 
 const asString = (value: unknown, fallback = ''): string =>
@@ -57,6 +88,130 @@ const serviceUnavailable = (service: string): DiscordResponse =>
     `⚠️ **${service} service is temporarily unavailable.** Please try again shortly.`
   );
 
+function parseGitHubPrUrl(
+  url: string
+): { owner: string; repo: string; pull_number: string } | undefined {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return undefined;
+  }
+
+  const host = parsedUrl.hostname.toLowerCase().replace(/^www\./, '');
+  if (host !== 'github.com') {
+    return undefined;
+  }
+
+  const [owner, repo, maybePull, pull_number] = parsedUrl.pathname
+    .split('/')
+    .filter(Boolean);
+
+  if (!owner || !repo || maybePull !== 'pull' || !pull_number || !/^\d+$/.test(pull_number)) {
+    return undefined;
+  }
+
+  return { owner, repo, pull_number };
+}
+
+export function validatePrUrl(url: string): PrUrlValidationResult {
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    return { valid: false, error: 'Missing PR URL.' };
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return { valid: false, error: 'Invalid URL format.' };
+  }
+
+  const host = parsedUrl.hostname.toLowerCase().replace(/^www\./, '');
+  if (host !== 'github.com') {
+    return {
+      valid: false,
+      error: 'Only GitHub pull request URLs are supported.',
+    };
+  }
+
+  const segments = parsedUrl.pathname.split('/').filter(Boolean);
+  if (segments.length >= 3 && segments[2] === 'pull' && !segments[3]) {
+    return { valid: false, error: 'Missing pull request number in URL.' };
+  }
+
+  if (!parseGitHubPrUrl(url)) {
+    return { valid: false, error: 'Invalid GitHub PR URL.' };
+  }
+
+  return { valid: true };
+}
+
+export function parseCommandOptions(
+  commandName: string | undefined,
+  options: DiscordInteractionOption[] = []
+): ParsedCommandOptions {
+  if (!commandName) {
+    return { valid: false, error: 'Missing command name. Try `/help`.' };
+  }
+
+  const pickOption = (optionName: string): string | number | boolean | undefined =>
+    options.find((option) => option.name === optionName)?.value;
+
+  if (commandName === 'review') {
+    const prUrl = pickOption('pr_url');
+    if (!prUrl || typeof prUrl !== 'string') {
+      return { valid: false, error: 'Missing or invalid `pr_url` argument.' };
+    }
+    return { valid: true, command: 'review', args: { pr_url: prUrl } };
+  }
+
+  if (commandName === 'scan') {
+    const repo = pickOption('repo');
+    if (!repo || typeof repo !== 'string') {
+      return { valid: false, error: 'Missing or invalid `repo` argument.' };
+    }
+    return { valid: true, command: 'scan', args: { repo } };
+  }
+
+  return {
+    valid: false,
+    error: `Unknown command \`/${commandName}\`. Try \`/help\` for available commands.`,
+  };
+}
+
+export function buildRiskSummary(score: number): RiskSummary {
+  if (score <= 33) {
+    return {
+      score,
+      level: 'low',
+      reasons: [
+        'Smaller change footprint.',
+        'Lower expected regression surface.',
+      ],
+    };
+  }
+
+  if (score <= 66) {
+    return {
+      score,
+      level: 'medium',
+      reasons: [
+        'Moderate code churn.',
+        'Requires focused regression checks.',
+      ],
+    };
+  }
+
+  return {
+    score,
+    level: 'high',
+    reasons: [
+      'High change volume or complexity.',
+      'Elevated likelihood of cross-file regressions.',
+    ],
+  };
+}
+
 const findOption = (
   interaction: DiscordInteraction,
   name: string
@@ -70,22 +225,30 @@ const commandStatus: DiscordCommandHandler = async () => {
 
 const commandReview: DiscordCommandHandler = async (interaction) => {
   try {
-    const prUrl = findOption(interaction, 'pr_url');
-    if (!prUrl || typeof prUrl !== 'string') {
-      return response('❌ Missing or invalid `pr_url` argument.');
+    const parsedReviewOptions = parseCommandOptions(
+      interaction.data?.name,
+      interaction.data?.options ?? []
+    );
+    if (!parsedReviewOptions.valid) {
+      return response(`❌ ${parsedReviewOptions.error}`);
     }
+    const prUrl = parsedReviewOptions.args.pr_url;
 
     const triage = triageInput(prUrl);
     if (!triage.safe) {
       return response(`⚠️ **Shield Alert:** ${triage.reason}`);
     }
 
-    const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-    if (!match) {
-      return response('❌ Invalid GitHub PR URL.');
+    const validation = validatePrUrl(prUrl);
+    if (!validation.valid) {
+      return response(`❌ ${validation.error}`);
     }
 
-    const [, owner, repo, pull_number] = match;
+    const parsedPrUrl = parseGitHubPrUrl(prUrl);
+    if (!parsedPrUrl) {
+      return response('❌ Invalid GitHub PR URL.');
+    }
+    const { owner, repo, pull_number } = parsedPrUrl;
     const authHeaders = {
       Authorization: `Bearer ${interaction.env?.GITHUB_TOKEN}`,
       'User-Agent': 'Clanka-Discord',
@@ -138,13 +301,18 @@ const commandReview: DiscordCommandHandler = async (interaction) => {
     const title = asString(prData.title, 'Untitled');
     const additions = Number(prData.additions) || 0;
     const deletions = Number(prData.deletions) || 0;
+    const score = riskScore(diffText);
+    const riskSummary = buildRiskSummary(score);
 
     return response(
       `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
         `**Title:** ${title}\n` +
         `**Author:** ${author}\n` +
-        `**Diff:** +${additions} / -${deletions}\n\n` +
-        `**${analysis.logicSummary}**`
+        `**Diff:** +${additions} / -${deletions}\n` +
+        `**Risk:** ${riskSummary.level.toUpperCase()} (${riskSummary.score}/100)\n` +
+        `**Risk Signals:** ${riskSummary.reasons.join(' ')}\n\n` +
+        `**${analysis.logicSummary}**`,
+      { riskSummary }
     );
   } catch {
     return serviceUnavailable('PR Review');

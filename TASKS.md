@@ -16,10 +16,10 @@
 - [x] **`shared/shield.ts` — expand patterns** — added base64, markdown javascript links, encoded null bytes, and SSRF-adjacent target detection with tests (2026-02-28).
 - [x] **Add CI workflow** — GitHub Actions CI (lint + test) added and passing (2026-02-26)
 - [x] **`shared/` — add index.ts barrel export** — currently consumers import directly from `shield.ts` / `spine.ts`. Add `shared/index.ts` re-exporting both for cleaner consumption.
-- [ ] **Add regression tests for PR URL validation and command option parsing**
-  - Add unit tests for `commandReview` with malformed `pr_url`, unsupported GitHub URL forms, and `feedback.limit` edge cases (negative/zero/non-numeric/too-large).
-- [ ] **Surface risk summary in `/review` response using existing `riskScore`**
-  - Update `commandReview` to compute `riskScore(diffText)` and include a concise score/rationale in the returned Discord message, with tests.
+- [x] **Add regression tests for PR URL validation and command option parsing** (2026-03-01)
+  - Added `workers/clanka-discord/commands/registry.test.ts` coverage for `validatePrUrl` valid/non-GitHub/missing-PR cases and command option parsing for `/review`, `/scan`, and unknown command errors.
+- [x] **Surface risk summary in `/review` response using existing `riskScore`** (2026-03-01)
+  - `commandReview` now computes `riskScore(diffText)`, builds `riskSummary`, and returns it in the response payload with risk details in the Discord message.
 - [ ] **Introduce a runtime command schema for `workers/clanka-discord/commands/registry.ts`**
   - Replace the inline `commandRegistry` map with a typed schema carrying name, description, handler, and option definitions so command registration and runtime dispatch share the same source of truth.
 - [ ] **Make worker build script cross-platform**
