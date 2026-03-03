@@ -12,6 +12,7 @@
 - `shared/spine.ts` - diff structure analysis (`analyzeDiff`)
 - `workers/clanka-discord/` - worker package + wrangler config + deploy scripts
 - `docs/` - runbook and codex notes
+- `docs/adr/error-handling-policy.md` - command error-handling policy (malformed input, upstream failures, timeout policy)
 
 ## Run And Deploy
 This repo does not have a root `package.json`; run commands inside the worker package.

@@ -36,8 +36,8 @@
   - Added `workers/clanka-discord/commands/handlers.test.ts` covering `/status`, `/help`, `/review`, and `/feedback` with mocked Discord interaction objects and mocked fetch responses.
 - [x] **Add explicit admin-id sanitization and diagnostics for `CLANKA_ADMIN_IDS`** — 2026-03-02
   - Added trimmed, deduplicated parsing for `CLANKA_ADMIN_IDS` and now denylist diagnostics when parsed allowlist is empty or malformed.
-- [ ] **Add a lightweight docs/ADR for error handling policy**
-  - Document how each command handles malformed input, upstream API failures, and timeout behavior so future contributors extend behavior consistently.
+- [x] **Add a lightweight docs/ADR for error handling policy** — done (2026-03-03)
+  - Added `docs/adr/error-handling-policy.md` documenting command-level malformed input checks, upstream failure responses, and timeout behavior expectations.
 
 ## 🧠 Notes
 - Root `package.json` exists and runs workspace build/test commands
