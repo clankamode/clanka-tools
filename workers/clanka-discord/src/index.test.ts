@@ -27,7 +27,7 @@ const env: WorkerEnv = {
   GITHUB_TOKEN: "github-token",
   SUPABASE_URL: "https://example.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "supabase-key",
-  CLANKA_ADMIN_IDS: "authorized-user",
+  CLANKA_ADMIN_IDS: "111111111111111111",
 };
 
 const makeInteractionRequest = (payload: object, options: { method?: string } = {}) => {
@@ -116,13 +116,76 @@ describe("workers/clanka-discord index request handling", () => {
       makeInteractionRequest({
         type: 2,
         data: { name: "nonexistent" },
-        member: { user: { id: "authorized-user" } },
+        member: { user: { id: "111111111111111111" } },
       }),
       env as never
     );
 
     expect(response.status).toBe(400);
     expect(await response.text()).toBe("Unknown command");
+  });
+
+  it("allows authorized users when admin IDs are deduplicated and trimmed", async () => {
+    vi.mocked(verifyKey).mockReturnValue(true);
+
+    const response = await worker.fetch(
+      makeInteractionRequest({
+        type: 2,
+        data: { name: "status" },
+        member: { user: { id: "222222222222222222" } },
+      }),
+      {
+        ...env,
+        CLANKA_ADMIN_IDS:
+          "111111111111111111, 222222222222222222 ,111111111111111111,",
+      } as never
+    );
+    const payload = (await response.json()) as { data: { content: string } };
+
+    expect(response.status).toBe(200);
+    expect(payload.data.content).toContain("CLANKA: Operational");
+  });
+
+  it("denies access with diagnostics when admin allowlist is empty", async () => {
+    vi.mocked(verifyKey).mockReturnValue(true);
+
+    const response = await worker.fetch(
+      makeInteractionRequest({
+        type: 2,
+        data: { name: "status" },
+        member: { user: { id: "111111111111111111" } },
+      }),
+      {
+        ...env,
+        CLANKA_ADMIN_IDS: " , , ",
+      } as never
+    );
+    const payload = (await response.json()) as { data: { content: string } };
+
+    expect(response.status).toBe(200);
+    expect(payload.data.content).toContain("No valid admin IDs were parsed from CLANKA_ADMIN_IDS");
+    expect(payload.data.content).toContain("Access Denied.");
+  });
+
+  it("denies access with diagnostics when admin allowlist contains malformed IDs", async () => {
+    vi.mocked(verifyKey).mockReturnValue(true);
+
+    const response = await worker.fetch(
+      makeInteractionRequest({
+        type: 2,
+        data: { name: "status" },
+        member: { user: { id: "111111111111111111" } },
+      }),
+      {
+        ...env,
+        CLANKA_ADMIN_IDS: "111111111111111111,authorized-user",
+      } as never
+    );
+    const payload = (await response.json()) as { data: { content: string } };
+
+    expect(response.status).toBe(200);
+    expect(payload.data.content).toContain("Malformed CLANKA_ADMIN_IDS entries");
+    expect(payload.data.content).toContain("Access Denied.");
   });
 
   it("dispatches /status for authorized users", async () => {
@@ -132,7 +195,7 @@ describe("workers/clanka-discord index request handling", () => {
       makeInteractionRequest({
         type: 2,
         data: { name: "status" },
-        member: { user: { id: "authorized-user" } },
+        member: { user: { id: "111111111111111111" } },
       }),
       env as never
     );
@@ -149,7 +212,7 @@ describe("workers/clanka-discord index request handling", () => {
       makeInteractionRequest({
         type: 2,
         data: { name: "help" },
-        member: { user: { id: "authorized-user" } },
+        member: { user: { id: "111111111111111111" } },
       }),
       env as never
     );
@@ -170,7 +233,7 @@ describe("workers/clanka-discord index request handling", () => {
           name: "review",
           options: [{ name: "pr_url", value: "https://github.com/example/repo/pull/123" }],
         },
-        member: { user: { id: "authorized-user" } },
+        member: { user: { id: "111111111111111111" } },
       }),
       env as never
     );
@@ -191,7 +254,7 @@ describe("workers/clanka-discord index request handling", () => {
           name: "feedback",
           options: [{ name: "limit", value: 5 }],
         },
-        member: { user: { id: "authorized-user" } },
+        member: { user: { id: "111111111111111111" } },
       }),
       env as never
     );
@@ -214,7 +277,7 @@ describe("workers/clanka-discord index request handling", () => {
           name: "review",
           options: [{ name: "pr_url", value: "https://github.com/example/repo/pull/123" }],
         },
-        member: { user: { id: "authorized-user" } },
+        member: { user: { id: "111111111111111111" } },
       }),
       env as never
     );
@@ -237,7 +300,7 @@ describe("workers/clanka-discord index request handling", () => {
           name: "feedback",
           options: [{ name: "limit", value: 5 }],
         },
-        member: { user: { id: "authorized-user" } },
+        member: { user: { id: "111111111111111111" } },
       }),
       env as never
     );

@@ -20,6 +20,34 @@ export interface Env {
   CLANKA_STATE: unknown;
 }
 
+function parseAdminIds(raw: string | undefined): {
+  ids: string[];
+  diagnostic?: string;
+} {
+  const normalized = (raw ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  const deduped = Array.from(new Set(normalized));
+  if (deduped.length === 0) {
+    return {
+      ids: [],
+      diagnostic: "No valid admin IDs were parsed from CLANKA_ADMIN_IDS. Access denied.",
+    };
+  }
+
+  const malformed = deduped.filter((id) => !/^\d+$/.test(id));
+  if (malformed.length > 0) {
+    return {
+      ids: [],
+      diagnostic: `Malformed CLANKA_ADMIN_IDS entries detected (${malformed.join(", ")}). Access denied.`,
+    };
+  }
+
+  return { ids: deduped };
+}
+
 function jsonResponse(obj: DiscordResponse): Response {
   return new Response(JSON.stringify(obj), { headers: { 'Content-Type': 'application/json' } });
 }
@@ -59,8 +87,17 @@ export default {
       }
 
       // Security: Admin Lock
+      const { ids: allowedIds, diagnostic } = parseAdminIds(env.CLANKA_ADMIN_IDS);
+      if (diagnostic) {
+        return jsonResponse({
+          type: 4,
+          data: {
+            content: `🚫 **Access Denied.** ${diagnostic}`,
+          },
+        });
+      }
+
       const userId = interaction.member?.user?.id || interaction.user?.id;
-      const allowedIds = (env.CLANKA_ADMIN_IDS || '').split(',');
       if (!allowedIds.includes(userId)) {
         return jsonResponse({
           type: 4,
