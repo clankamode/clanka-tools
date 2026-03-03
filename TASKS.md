@@ -4,7 +4,11 @@
 ## 🔴 High Priority
 - [x] **Add tests for `shared/shield.ts`** — 27 tests written and passing (2026-02-26)
 - [x] **Add tests for `shared/spine.ts`** — 10 tests written and passing (2026-02-26)
-- [ ] **Deploy `workers/clanka-discord`** — verify the worker is actually deployed to Cloudflare and handling Discord interactions. Run `npx wrangler tail` to confirm live traffic or confirm deploy status.
+- [x] **Deploy `workers/clanka-discord`** — verify the worker is actually deployed to Cloudflare and handling Discord interactions. Run `npx wrangler tail` and/or confirm deploy status.
+  - Completed: 2026-03-03. Executed `cd workers/clanka-discord && npm run deploy`, which deployed version `a505cde5-afc0-478d-9a7e-9c3a8df1e070` and printed live worker URL `https://clanka-discord.clankamode.workers.dev`.
+  - Verification:
+    - `npx wrangler deployments list --json` shows latest deployment with version `a505cde5-afc0-478d-9a7e-9c3a8df1e070` at 100% traffic.
+    - Production probe: `curl -i https://clanka-discord.clankamode.workers.dev` returned `HTTP/2 405` and `Method not allowed`, confirming the deployed endpoint is live and reachable.
 - [x] **Add integration tests for `workers/clanka-discord/src/index.ts` request handling** — coverage added and passing (2026-02-28)
   - Test 405 for non-POST methods, invalid signature handling (`401`), admin-gate rejection, and unknown interaction dispatch behavior.
 - [x] **Add hard-fail-safe error handling for GitHub/Supabase request failures in `commandReview` and `commandFeedback`**
@@ -34,10 +38,10 @@
   - Added `docs/architecture.md` with ASCII diagrams showing `shield.ts` and `spine.ts` flow through the Discord worker and shared consumers.
 - [x] **Add `workers/clanka-discord` tests for command handlers** (2026-03-01)
   - Added `workers/clanka-discord/commands/handlers.test.ts` covering `/status`, `/help`, `/review`, and `/feedback` with mocked Discord interaction objects and mocked fetch responses.
-- [ ] **Add explicit admin-id sanitization and diagnostics for `CLANKA_ADMIN_IDS`**
-  - Trim/deduplicate IDs during parse and return a diagnostic deny message when the allowlist is empty or malformed instead of silently allowing broad access patterns.
-- [ ] **Add a lightweight docs/ADR for error handling policy**
-  - Document how each command handles malformed input, upstream API failures, and timeout behavior so future contributors extend behavior consistently.
+- [x] **Add explicit admin-id sanitization and diagnostics for `CLANKA_ADMIN_IDS`** — 2026-03-02
+  - Added trimmed, deduplicated parsing for `CLANKA_ADMIN_IDS` and now denylist diagnostics when parsed allowlist is empty or malformed.
+- [x] **Add a lightweight docs/ADR for error handling policy** — done (2026-03-03)
+  - Added `docs/adr/error-handling-policy.md` documenting command-level malformed input checks, upstream failure responses, and timeout behavior expectations.
 
 ## 🧠 Notes
 - Root `package.json` exists and runs workspace build/test commands

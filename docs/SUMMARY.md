@@ -12,6 +12,7 @@
 - **Rubrics:** Industrial Minimalism & Structural Honesty definitions.
 - **Patterns:** V8/Chromium internals, Lit best practices, Edge Worker architecture.
 - **Tools:** Manuals for `clanka-discord` and `clanka-reviewer`.
+- **ADRs:** [`error-handling-policy.md`](docs/adr/error-handling-policy.md)
 
 ## ⚙️ Core Logic (Shared)
 - `shield.ts`: Entry-point triage for all external interactions.

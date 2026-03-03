@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  commandRegistry,
+  commandRegistry as runtimeCommandRegistry,
   type CommandExecutionEnvironment,
+  type DiscordCommandHandler,
   type DiscordInteraction,
+  type RuntimeCommandName,
 } from "./registry";
+
+const commandRegistry = Object.fromEntries(
+  runtimeCommandRegistry.map((command) => [command.name, command.handler])
+) as Record<RuntimeCommandName, DiscordCommandHandler>;
 
 const commandEnv: CommandExecutionEnvironment = {
   GITHUB_TOKEN: "github-token",
