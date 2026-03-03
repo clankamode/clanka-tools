@@ -4,7 +4,11 @@
 ## 🔴 High Priority
 - [x] **Add tests for `shared/shield.ts`** — 27 tests written and passing (2026-02-26)
 - [x] **Add tests for `shared/spine.ts`** — 10 tests written and passing (2026-02-26)
-- [ ] **Deploy `workers/clanka-discord`** — verify the worker is actually deployed to Cloudflare and handling Discord interactions. Run `npx wrangler tail` to confirm live traffic or confirm deploy status.
+- [x] **Deploy `workers/clanka-discord`** — verify the worker is actually deployed to Cloudflare and handling Discord interactions. Run `npx wrangler tail` and/or confirm deploy status.
+  - Completed: 2026-03-03. Executed `cd workers/clanka-discord && npm run deploy`, which deployed version `a505cde5-afc0-478d-9a7e-9c3a8df1e070` and printed live worker URL `https://clanka-discord.clankamode.workers.dev`.
+  - Verification:
+    - `npx wrangler deployments list --json` shows latest deployment with version `a505cde5-afc0-478d-9a7e-9c3a8df1e070` at 100% traffic.
+    - Production probe: `curl -i https://clanka-discord.clankamode.workers.dev` returned `HTTP/2 405` and `Method not allowed`, confirming the deployed endpoint is live and reachable.
 - [x] **Add integration tests for `workers/clanka-discord/src/index.ts` request handling** — coverage added and passing (2026-02-28)
   - Test 405 for non-POST methods, invalid signature handling (`401`), admin-gate rejection, and unknown interaction dispatch behavior.
 - [x] **Add hard-fail-safe error handling for GitHub/Supabase request failures in `commandReview` and `commandFeedback`**
