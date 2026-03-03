@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "cd workers/clanka-discord && npm run build"
+    "build": "cd workers/clanka-discord && npm run build",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "vitest": "^4.0.18",
