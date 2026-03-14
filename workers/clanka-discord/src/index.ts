@@ -20,7 +20,7 @@ export interface Env {
   CLANKA_STATE: unknown;
 }
 
-function parseAdminIds(raw: string | undefined): {
+export function parseAdminIds(raw: string | null | undefined): {
   ids: string[];
   diagnostic?: string;
 } {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "./index";
+import { parseAdminIds } from "./index";
 import { verifyKey } from "discord-interactions";
 
 vi.mock("discord-interactions", () => ({
@@ -40,6 +41,74 @@ const makeInteractionRequest = (payload: object, options: { method?: string } = 
     body: JSON.stringify(payload),
   });
 };
+
+describe("parseAdminIds", () => {
+  it("returns empty ids with diagnostics for an empty string", () => {
+    expect(parseAdminIds("")).toEqual({
+      ids: [],
+      diagnostic: "No valid admin IDs were parsed from CLANKA_ADMIN_IDS. Access denied.",
+    });
+  });
+
+  it("returns empty ids with diagnostics for whitespace-only input", () => {
+    expect(parseAdminIds("   ,  ")).toEqual({
+      ids: [],
+      diagnostic: "No valid admin IDs were parsed from CLANKA_ADMIN_IDS. Access denied.",
+    });
+  });
+
+  it("returns empty ids with diagnostics for undefined and null input", () => {
+    expect(parseAdminIds(undefined)).toEqual({
+      ids: [],
+      diagnostic: "No valid admin IDs were parsed from CLANKA_ADMIN_IDS. Access denied.",
+    });
+
+    expect(parseAdminIds(null)).toEqual({
+      ids: [],
+      diagnostic: "No valid admin IDs were parsed from CLANKA_ADMIN_IDS. Access denied.",
+    });
+  });
+
+  it("returns valid numeric IDs without diagnostics", () => {
+    expect(parseAdminIds("123456789,987654321")).toEqual({
+      ids: ["123456789", "987654321"],
+    });
+  });
+
+  it("returns a single valid ID", () => {
+    expect(parseAdminIds("123456789")).toEqual({
+      ids: ["123456789"],
+    });
+  });
+
+  it("returns empty ids and malformed diagnostics when any ID is invalid", () => {
+    const result = parseAdminIds("abc,123");
+
+    expect(result.ids).toEqual([]);
+    expect(result.diagnostic).toContain("Malformed CLANKA_ADMIN_IDS entries detected");
+    expect(result.diagnostic).toContain("abc");
+  });
+
+  it("deduplicates duplicate IDs", () => {
+    expect(parseAdminIds("123456789,123456789,987654321,123456789")).toEqual({
+      ids: ["123456789", "987654321"],
+    });
+  });
+
+  it("trims leading and trailing whitespace around IDs", () => {
+    expect(parseAdminIds(" 123456789 ,  987654321  ")).toEqual({
+      ids: ["123456789", "987654321"],
+    });
+  });
+
+  it("rejects all IDs when valid and malformed entries are mixed", () => {
+    const result = parseAdminIds("123456789,abc,987654321");
+
+    expect(result.ids).toEqual([]);
+    expect(result.diagnostic).toContain("Malformed CLANKA_ADMIN_IDS entries detected");
+    expect(result.diagnostic).toContain("abc");
+  });
+});
 
 describe("workers/clanka-discord index request handling", () => {
   beforeEach(() => {
