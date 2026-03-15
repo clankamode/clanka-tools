@@ -272,18 +272,26 @@ const commandReview: DiscordCommandHandler = async (interaction) => {
     let prRes: Response;
     let diffRes: Response;
     try {
-      [prRes, diffRes] = await Promise.all([
-        fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
-          headers: authHeaders,
-        }),
-        fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
-          headers: {
-            Authorization: `Bearer ${interaction.env?.GITHUB_TOKEN}`,
-            'User-Agent': 'Clanka-Discord',
-            Accept: 'application/vnd.github.v3.diff',
-          },
-        }),
-      ]);
+      const reviewAbort = new AbortController();
+      const reviewTimeout = setTimeout(() => reviewAbort.abort(), 5000);
+      try {
+        [prRes, diffRes] = await Promise.all([
+          fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
+            headers: authHeaders,
+            signal: reviewAbort.signal,
+          }),
+          fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pull_number}`, {
+            headers: {
+              Authorization: `Bearer ${interaction.env?.GITHUB_TOKEN}`,
+              'User-Agent': 'Clanka-Discord',
+              Accept: 'application/vnd.github.v3.diff',
+            },
+            signal: reviewAbort.signal,
+          }),
+        ]);
+      } finally {
+        clearTimeout(reviewTimeout);
+      }
     } catch {
       return serviceUnavailable('PR Review');
     }
@@ -345,16 +353,23 @@ const commandFeedback: DiscordCommandHandler = async (interaction) => {
 
     let responsePayload: Response;
     try {
-      responsePayload = await fetch(
-        `${interaction.env?.SUPABASE_URL}/rest/v1/UserFeedback?select=*&order=created_at.desc&limit=${limit}`,
-        {
-          headers: {
-            apikey: interaction.env?.SUPABASE_SERVICE_ROLE_KEY ?? '',
-            Authorization: `Bearer ${interaction.env?.SUPABASE_SERVICE_ROLE_KEY ?? ''}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const feedbackAbort = new AbortController();
+      const feedbackTimeout = setTimeout(() => feedbackAbort.abort(), 5000);
+      try {
+        responsePayload = await fetch(
+          `${interaction.env?.SUPABASE_URL}/rest/v1/UserFeedback?select=*&order=created_at.desc&limit=${limit}`,
+          {
+            headers: {
+              apikey: interaction.env?.SUPABASE_SERVICE_ROLE_KEY ?? '',
+              Authorization: `Bearer ${interaction.env?.SUPABASE_SERVICE_ROLE_KEY ?? ''}`,
+              'Content-Type': 'application/json',
+            },
+            signal: feedbackAbort.signal,
+          }
+        );
+      } finally {
+        clearTimeout(feedbackTimeout);
+      }
     } catch {
       return serviceUnavailable('Feedback');
     }
