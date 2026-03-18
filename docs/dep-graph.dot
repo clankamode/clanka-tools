@@ -1,0 +1,43 @@
+digraph dependency_graph {
+  graph [rankdir="LR", fontname="Helvetica", bgcolor="white"];
+  node [shape="box", style="rounded,filled", fillcolor="#f6f8fa", color="#d0d7de", fontname="Helvetica"];
+  edge [color="#57606a"];
+
+  subgraph "cluster_shared" {
+    label = "shared";
+    color = "#d0d7de";
+    style = "rounded";
+    "shared/dep-graph.test" [label="dep-graph.test", tooltip="shared/dep-graph.test.ts"];
+    "shared/healthz" [label="healthz", tooltip="shared/healthz.ts"];
+    "shared/healthz.test" [label="healthz.test", tooltip="shared/healthz.test.ts"];
+    "shared/index" [label="index", tooltip="shared/index.ts"];
+    "shared/shield" [label="shield", tooltip="shared/shield.ts"];
+    "shared/shield.test" [label="shield.test", tooltip="shared/shield.test.ts"];
+    "shared/spine" [label="spine", tooltip="shared/spine.ts"];
+    "shared/spine.test" [label="spine.test", tooltip="shared/spine.test.ts"];
+  }
+
+  subgraph "cluster_clanka_discord" {
+    label = "clanka-discord";
+    color = "#d0d7de";
+    style = "rounded";
+    "workers/clanka-discord/src/index" [label="index", tooltip="workers/clanka-discord/src/index.ts"];
+    "workers/clanka-discord/src/index.test" [label="index.test", tooltip="workers/clanka-discord/src/index.test.ts"];
+  }
+
+  subgraph "cluster_clanka_reviewer" {
+    label = "clanka-reviewer";
+    color = "#d0d7de";
+    style = "rounded";
+    "workers/clanka-reviewer/src/index" [label="index", tooltip="workers/clanka-reviewer/src/index.ts"];
+  }
+
+  "shared/healthz.test" -> "shared/healthz";
+  "shared/index" -> "shared/healthz";
+  "shared/index" -> "shared/shield";
+  "shared/index" -> "shared/spine";
+  "shared/shield.test" -> "shared/shield";
+  "shared/spine.test" -> "shared/spine";
+  "workers/clanka-discord/src/index" -> "shared/healthz";
+  "workers/clanka-discord/src/index.test" -> "workers/clanka-discord/src/index";
+}
