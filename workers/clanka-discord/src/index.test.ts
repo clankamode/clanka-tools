@@ -132,6 +132,48 @@ describe("workers/clanka-discord index request handling", () => {
     expect(await response.text()).toBe("Method not allowed");
   });
 
+  it("returns health status for GET /healthz", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-18T00:00:05.000Z"));
+
+    try {
+      const response = await worker.fetch(
+        new Request("https://discord.local/healthz", {
+          method: "GET",
+        }),
+        env as never
+      );
+      const payload = (await response.json()) as {
+        status: string;
+        version: string;
+        uptime: number;
+        timestamp: string;
+      };
+
+      expect(response.status).toBe(200);
+      expect(payload.status).toBe("ok");
+      expect(payload.version).toBe("1.0.0");
+      expect(payload.uptime).toBeGreaterThanOrEqual(0);
+      expect(payload.timestamp).toBe("2026-03-18T00:00:05.000Z");
+      expect(Number.isNaN(Date.parse(payload.timestamp))).toBe(false);
+      expect(verifyKey).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not match POST /healthz with the healthz handler", async () => {
+    const response = await worker.fetch(
+      new Request("https://discord.local/healthz", {
+        method: "POST",
+      }),
+      env as never
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe("Bad request signature");
+  });
+
   it("returns 401 for invalid signatures", async () => {
     vi.mocked(verifyKey).mockReturnValue(false);
 

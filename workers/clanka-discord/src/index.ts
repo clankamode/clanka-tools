@@ -2,12 +2,16 @@ import {
   InteractionType,
   verifyKey,
 } from 'discord-interactions';
+import { createHealthCheck } from '../../../shared/healthz';
 import {
   getCommandSchema,
   type CommandExecutionEnvironment,
   type DiscordInteraction,
   type DiscordResponse,
 } from '../commands/registry';
+
+const VERSION = '1.0.0';
+const checkHealth = createHealthCheck({ version: VERSION });
 
 export interface Env {
   DISCORD_PUBLIC_KEY: string;
@@ -48,8 +52,11 @@ export function parseAdminIds(raw: string | null | undefined): {
   return { ids: deduped };
 }
 
-function jsonResponse(obj: DiscordResponse): Response {
-  return new Response(JSON.stringify(obj), { headers: { 'Content-Type': 'application/json' } });
+function jsonResponse<T>(obj: T, status = 200): Response {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 function pongResponse(): DiscordResponse {
@@ -62,6 +69,13 @@ function pongResponse(): DiscordResponse {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
+      const url = new URL(request.url);
+
+      if (request.method === 'GET' && url.pathname === '/healthz') {
+        const status = await checkHealth();
+        return jsonResponse(status, status.status === 'down' ? 503 : 200);
+      }
+
       if (request.method !== 'POST') {
         return new Response('Method not allowed', { status: 405 });
       }
