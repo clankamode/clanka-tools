@@ -1,5 +1,5 @@
 # TASKS.md — clanka-tools
-> Last updated: 2026-03-01 | Status: open
+> Last updated: 2026-03-17 | Status: open
 
 ## 🔴 High Priority
 - [x] **Add tests for `shared/shield.ts`** — 27 tests written and passing (2026-02-26)
@@ -30,6 +30,9 @@
   - Replaced macOS-specific shell script build flow with `workers/clanka-discord/scripts/build.mjs` and updated the package build script to use Node-based file copy/rewrite logic.
 - [x] **Add documentation for production env wiring and required tokens/secrets** (2026-03-01)
   - Added `workers/clanka-discord/README.md` with required production secrets/vars, Cloudflare wiring, and local/deploy command flow.
+- [x] **Add shared `healthz` protocol for tool status endpoints** (2026-03-17)
+  - Added `shared/healthz.ts` with `createHealthCheck()` for standard version, uptime, timestamp, and dependency status reporting.
+  - Added Vitest coverage for no-dependency, degraded/down propagation, rejected dependency checks, and uptime progression.
 
 ## 🟢 Low Priority / Nice to Have
 - [x] **`workers/clanka-discord` — add command registry** — typed runtime command schema and name-based lookup helpers added for dispatch/metadata reuse (2026-03-01).
@@ -49,4 +52,4 @@
 - `shared/spine.ts`: diff structure analysis — `analyzeDiff(diff): DiffInfo`
 - `workers/clanka-discord/`: Cloudflare Worker handling Discord interactions
 - No `src/` at root level — source lives in `workers/` and `shared/`
-- No open GitHub issues
+- GitHub issue #15 tracks the shared tool health check protocol and is implemented on `feat/tool-health-check-protocol`
