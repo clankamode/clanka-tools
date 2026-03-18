@@ -6,6 +6,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "dep-graph": "node scripts/dep-graph.mjs",
     "build": "cd workers/clanka-discord && npm run build",
     "prepare": "git config core.hooksPath .githooks"
   },
