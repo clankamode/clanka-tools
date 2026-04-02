@@ -11,8 +11,9 @@
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
-    "vitest": "^4.1.0",
-    "typescript": "^5.4.0"
+    "@types/node": "^25.5.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.0"
   },
   "workspaces": [
     "workers/clanka-discord"
