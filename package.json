@@ -11,7 +11,7 @@
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
-    "vitest": "^4.1.2",
+    "vitest": "^4.1.4",
     "typescript": "^6.0.2"
   },
   "workspaces": [
