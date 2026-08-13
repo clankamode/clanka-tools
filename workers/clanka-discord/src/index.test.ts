@@ -217,7 +217,9 @@ describe("workers/clanka-discord index request handling", () => {
     const payload = (await response.json()) as { data: { content: string } };
 
     expect(response.status).toBe(200);
-    expect(payload.data.content).toContain("Unauthorized User ID: unauthorized-user");
+    expect(payload.data.content).toContain("Access Denied.");
+    expect(payload.data.content).toContain("not on the admin allowlist");
+    expect(payload.data.content).not.toContain("unauthorized-user");
   });
 
   it("returns 400 for unknown command dispatch", async () => {
