@@ -256,7 +256,7 @@ describe("workers/clanka-discord index request handling", () => {
     const payload = (await response.json()) as { data: { content: string } };
 
     expect(response.status).toBe(200);
-    expect(payload.data.content).toContain("CLANKA: Operational");
+    expect(payload.data.content).toContain("Discord worker is responding");
   });
 
   it("denies access with diagnostics when admin allowlist is empty", async () => {
@@ -315,7 +315,7 @@ describe("workers/clanka-discord index request handling", () => {
     const payload = (await response.json()) as { data: { content: string } };
 
     expect(response.status).toBe(200);
-    expect(payload.data.content).toContain("CLANKA: Operational");
+    expect(payload.data.content).toContain("Discord worker is responding");
   });
 
   it("dispatches /help for authorized users", async () => {

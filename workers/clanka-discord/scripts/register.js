@@ -1,7 +1,7 @@
 const COMMANDS = [
   {
     name: 'status',
-    description: 'Check Clanka system status',
+    description: 'Confirm the Discord worker is responding',
   },
   {
     name: 'review',

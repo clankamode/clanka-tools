@@ -153,7 +153,7 @@ describe("runtime command registry integration", () => {
   it("looks up /status by command name", () => {
     const command = getCommandSchema("status");
     expect(command?.name).toBe("status");
-    expect(command?.description).toContain("status");
+    expect(command?.description).toContain("responding");
   });
 
   it("looks up /review metadata including option schema", () => {
@@ -226,11 +226,12 @@ describe("runtime command handlers", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns operational message for /status", async () => {
+  it("returns honest liveness message for /status", async () => {
     const statusHandler = requireHandler("status");
     const response = await statusHandler({ env: commandEnv });
     expect(response.type).toBe(4);
-    expect(response.data?.content).toContain("CLANKA: Operational");
+    expect(response.data?.content).toContain("Discord worker is responding");
+    expect(response.data?.content).toContain("does **not** verify");
   });
 
   it("returns command list for /help", async () => {
