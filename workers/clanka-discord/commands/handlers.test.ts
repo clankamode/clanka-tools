@@ -51,10 +51,11 @@ describe("commandRegistry handlers", () => {
     }
   });
 
-  it("returns an operational response for /status", async () => {
+  it("returns an honest liveness response for /status", async () => {
     const response = await commandRegistry.status({ env: commandEnv });
     expect(response.type).toBe(4);
-    expect(response.data?.content).toContain("CLANKA: Operational");
+    expect(response.data?.content).toContain("Discord worker is responding");
+    expect(response.data?.content).toContain("does **not** verify");
   });
 
   it("returns command usage help for /help", async () => {
@@ -110,13 +111,14 @@ describe("commandRegistry.feedback", () => {
     expect(response.data?.content).toContain("No recent user feedback found");
   });
 
-  it("returns a no-feedback message when payload is not an array", async () => {
+  it("returns an unexpected-shape message when payload is not an array", async () => {
     vi.mocked(globalThis.fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({}), { status: 200 })
     );
 
     const response = await commandRegistry.feedback(makeFeedbackInteraction());
-    expect(response.data?.content).toContain("No recent user feedback found");
+    expect(response.data?.content).toContain("Unexpected response shape");
+    expect(response.data?.content).not.toContain("No recent user feedback found");
   });
 
   it("formats multiple feedback entries", async () => {
@@ -369,7 +371,7 @@ describe("commandRegistry.review", () => {
     expect(response.data?.content).toContain("PR Review service is temporarily unavailable");
   });
 
-  it("still returns a review when diff endpoint is non-ok", async () => {
+  it("does not present a missing diff as low risk", async () => {
     vi.mocked(globalThis.fetch)
       .mockResolvedValueOnce(
         new Response(
@@ -389,8 +391,10 @@ describe("commandRegistry.review", () => {
     );
 
     expect(response.data?.content).toContain("PR Review: #9 in example/repo");
-    expect(response.data?.content).toContain("**Risk:** LOW (0/100)");
-    expect(response.data?.riskSummary?.level).toBe("low");
+    expect(response.data?.content).toContain("Diff unavailable");
+    expect(response.data?.content).toContain("HTTP 404");
+    expect(response.data?.content).not.toContain("**Risk:** LOW");
+    expect(response.data?.riskSummary).toBeUndefined();
   });
 
   it("formats a successful review payload with risk summary", async () => {

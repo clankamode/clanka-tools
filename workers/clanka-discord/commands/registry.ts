@@ -234,7 +234,10 @@ const findOption = (
 };
 
 const commandStatus: DiscordCommandHandler = async () => {
-  return response('⚡ **CLANKA: Operational.** Systems verified. Shield active.');
+  return response(
+    '⚡ **CLANKA:** Discord worker is responding.\n' +
+      'This check does **not** verify GitHub, Supabase, or Shield health. Use `GET /healthz` for worker liveness metadata.'
+  );
 };
 
 const commandReview: DiscordCommandHandler = async (interaction) => {
@@ -308,21 +311,30 @@ const commandReview: DiscordCommandHandler = async (interaction) => {
       return serviceUnavailable('PR Review');
     }
 
-    let diffText = '';
-    if (diffRes.ok) {
-      try {
-        diffText = await diffRes.text();
-      } catch {
-        return serviceUnavailable('PR Review');
-      }
-    }
-    const analysis = analyzeDiff(diffText);
-
     const user = asObject(prData.user) ?? {};
     const author = asString(user.login);
     const title = asString(prData.title, 'Untitled');
     const additions = Number(prData.additions) || 0;
     const deletions = Number(prData.deletions) || 0;
+
+    if (!diffRes.ok) {
+      return response(
+        `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
+          `**Title:** ${title}\n` +
+          `**Author:** ${author}\n` +
+          `**Diff:** +${additions} / -${deletions}\n` +
+          `⚠️ **Diff unavailable** (GitHub returned HTTP ${diffRes.status}). Risk was not scored from missing diff content.`
+      );
+    }
+
+    let diffText = '';
+    try {
+      diffText = await diffRes.text();
+    } catch {
+      return serviceUnavailable('PR Review');
+    }
+
+    const analysis = analyzeDiff(diffText);
     const score = riskScore(diffText);
     const riskSummary = buildRiskSummary(score);
 
@@ -381,7 +393,12 @@ const commandFeedback: DiscordCommandHandler = async (interaction) => {
     let feedbackData: Array<Record<string, unknown>>;
     try {
       const payload = (await responsePayload.json()) as unknown;
-      feedbackData = Array.isArray(payload) ? (payload as Array<Record<string, unknown>>) : [];
+      if (!Array.isArray(payload)) {
+        return response(
+          '⚠️ **Feedback Engine:** Unexpected response shape from Supabase (expected a list).'
+        );
+      }
+      feedbackData = payload as Array<Record<string, unknown>>;
     } catch {
       return serviceUnavailable('Feedback');
     }
@@ -415,7 +432,7 @@ const commandFeedback: DiscordCommandHandler = async (interaction) => {
 const commandHelp: DiscordCommandHandler = async () => {
   return response(
     `📘 **Clanka Commands**\n\n` +
-      `• \`/status\` - Check if Clanka is operational\n` +
+      `• \`/status\` - Confirm the Discord worker is responding (not a full dependency check)\n` +
       `• \`/review pr_url\` - Run a heuristic code review on a GitHub PR\n` +
       `• \`/feedback [limit]\` - Show recent user feedback from Supabase\n` +
       `• \`/help\` - Show this help message`
@@ -425,7 +442,7 @@ const commandHelp: DiscordCommandHandler = async () => {
 const runtimeCommandRegistry = [
   {
     name: 'status',
-    description: 'Check Clanka system status',
+    description: 'Confirm the Discord worker is responding',
     handler: commandStatus,
   },
   {
