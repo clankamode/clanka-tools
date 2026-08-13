@@ -132,9 +132,31 @@ export async function writeDependencyGraph(options = {}) {
   return { dotPath, svgPath, graph };
 }
 
+/**
+ * @param {{ rootDir: string, dotPath: string, svgPath: string | null }} result
+ * @returns {string[]}
+ */
+export function formatDepGraphWriteMessages(result) {
+  const messages = [`Wrote ${path.relative(result.rootDir, result.dotPath)}`];
+  if (result.svgPath) {
+    messages.push(`Wrote ${path.relative(result.rootDir, result.svgPath)}`);
+  } else {
+    messages.push(
+      "Skipped docs/dep-graph.svg: Graphviz `dot` not found on PATH. Install Graphviz to render SVG.",
+    );
+  }
+  return messages;
+}
+
 async function main() {
-  const { dotPath } = await writeDependencyGraph();
-  console.log(`Wrote ${path.relative(defaultRootDir, dotPath)}`);
+  const { dotPath, svgPath } = await writeDependencyGraph();
+  for (const message of formatDepGraphWriteMessages({
+    rootDir: defaultRootDir,
+    dotPath,
+    svgPath,
+  })) {
+    console.log(message);
+  }
 }
 
 /**
