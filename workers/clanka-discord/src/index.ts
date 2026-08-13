@@ -115,7 +115,10 @@ export default {
       if (!allowedIds.includes(userId)) {
         return jsonResponse({
           type: 4,
-          data: { content: `🚫 **Access Denied.** Unauthorized User ID: ${userId}` },
+          data: {
+            content:
+              '🚫 **Access Denied.** Your Discord user is not on the admin allowlist.',
+          },
         });
       }
 
