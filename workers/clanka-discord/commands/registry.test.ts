@@ -242,6 +242,8 @@ describe("runtime command handlers", () => {
     expect(response.data?.content).toContain("/review");
     expect(response.data?.content).toContain("/feedback");
     expect(response.data?.content).toContain("/help");
+    expect(response.data?.content).toContain("diff structure and risk score");
+    expect(response.data?.content).not.toContain("heuristic");
   });
 
   it("returns empty-state message for /feedback when no records exist", async () => {

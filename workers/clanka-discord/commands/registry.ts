@@ -334,6 +334,16 @@ const commandReview: DiscordCommandHandler = async (interaction) => {
       return serviceUnavailable('PR Review');
     }
 
+    if (!diffText.trim()) {
+      return response(
+        `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
+          `**Title:** ${title}\n` +
+          `**Author:** ${author}\n` +
+          `**Diff:** +${additions} / -${deletions}\n` +
+          `⚠️ **Diff unavailable** (empty or whitespace-only body). Risk was not scored from missing diff content.`
+      );
+    }
+
     const analysis = analyzeDiff(diffText);
     const score = riskScore(diffText);
     const riskSummary = buildRiskSummary(score);
@@ -433,7 +443,7 @@ const commandHelp: DiscordCommandHandler = async () => {
   return response(
     `📘 **Clanka Commands**\n\n` +
       `• \`/status\` - Confirm the Discord worker is responding (not a full dependency check)\n` +
-      `• \`/review pr_url\` - Run a heuristic code review on a GitHub PR\n` +
+      `• \`/review pr_url\` - Summarize a GitHub PR diff structure and risk score\n` +
       `• \`/feedback [limit]\` - Show recent user feedback from Supabase\n` +
       `• \`/help\` - Show this help message`
   );
