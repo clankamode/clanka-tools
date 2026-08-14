@@ -65,6 +65,8 @@ describe("commandRegistry handlers", () => {
     expect(response.data?.content).toContain("/review");
     expect(response.data?.content).toContain("/feedback");
     expect(response.data?.content).toContain("/help");
+    expect(response.data?.content).toContain("diff structure and risk score");
+    expect(response.data?.content).not.toContain("heuristic");
   });
 });
 
@@ -397,6 +399,32 @@ describe("commandRegistry.review", () => {
     expect(response.data?.riskSummary).toBeUndefined();
   });
 
+  it("does not invent a LOW risk score for empty or whitespace-only diffs", async () => {
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            user: { login: "octocat" },
+            title: "Looks changed but diff is missing",
+            additions: 12,
+            deletions: 4,
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(new Response("   \n\t  ", { status: 200 }));
+
+    const response = await commandRegistry.review(
+      makeReviewInteraction("https://github.com/example/repo/pull/11")
+    );
+
+    expect(response.data?.content).toContain("PR Review: #11 in example/repo");
+    expect(response.data?.content).toContain("Diff unavailable");
+    expect(response.data?.content).toContain("empty or whitespace-only");
+    expect(response.data?.content).not.toContain("**Risk:**");
+    expect(response.data?.riskSummary).toBeUndefined();
+  });
+
   it("formats a successful review payload with risk summary", async () => {
     vi.mocked(globalThis.fetch)
       .mockResolvedValueOnce(
@@ -449,6 +477,9 @@ describe("commandRegistry.review", () => {
     expect(response.data?.content).toContain("Title:** Untitled");
     expect(response.data?.content).toContain("Author:**");
     expect(response.data?.content).toContain("Diff:** +0 / -0");
+    expect(response.data?.content).toContain("Diff unavailable");
+    expect(response.data?.content).not.toContain("**Risk:**");
+    expect(response.data?.riskSummary).toBeUndefined();
   });
 
   it("accepts GitHub URLs on the www subdomain", async () => {
@@ -492,6 +523,8 @@ describe("commandRegistry.review", () => {
 
     expect(response.data?.content).toContain("Title:** Untitled");
     expect(response.data?.content).toContain("Diff:** +0 / -0");
+    expect(response.data?.content).toContain("Diff unavailable");
+    expect(response.data?.content).not.toContain("**Risk:**");
   });
 
   it("returns high risk summary for large src-only diffs", async () => {
