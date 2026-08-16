@@ -16,6 +16,10 @@
   - [x] Added defensive catch-all handling and fallback payload parsing/sanitization in command handlers; updated tests for malformed upstream payloads (2026-02-28).
 
 ## 🟡 Medium Priority
+- [x] **Fail-closed empty/malformed inputs in shared shield + spine** (2026-08-16)
+  - `triageInput` rejects empty, whitespace-only, and non-string input (`safe: false`).
+  - `analyzeDiff` exposes `parseStatus: ok | empty | unreadable`; `riskScore` returns `null` when unscorable.
+  - Vitest coverage for empty/whitespace/unreadable vs parsed no-hunk diffs; Discord `/review` does not invent LOW risk for unreadable bodies.
 - [x] **Add root `package.json`** — done, with vitest workspace config (2026-02-26)
 - [x] **`shared/shield.ts` — expand patterns** — added base64, markdown javascript links, encoded null bytes, and SSRF-adjacent target detection with tests (2026-02-28).
 - [x] **Add CI workflow** — GitHub Actions CI (lint + test) added and passing (2026-02-26)
@@ -48,8 +52,8 @@
 
 ## 🧠 Notes
 - Root `package.json` exists and runs workspace build/test commands
-- `shared/shield.ts`: prompt injection / DoS guard — `triageInput(input): { safe, reason }`
-- `shared/spine.ts`: diff structure analysis — `analyzeDiff(diff): DiffInfo`
+- `shared/shield.ts`: prompt injection / DoS guard — `triageInput(input): { safe, reason }` (fail-closed on empty/malformed)
+- `shared/spine.ts`: diff structure analysis — `analyzeDiff(diff): DiffInfo` with `parseStatus`; `riskScore` returns `null` when unscorable
 - `workers/clanka-discord/`: Cloudflare Worker handling Discord interactions
 - No `src/` at root level — source lives in `workers/` and `shared/`
 - GitHub issue #15 tracks the shared tool health check protocol and is implemented on `feat/tool-health-check-protocol`

@@ -129,6 +129,31 @@ describe("triageInput — new pattern coverage", () => {
   });
 });
 
+describe("triageInput — fail-closed empty/malformed", () => {
+  it("rejects empty string", () => {
+    const result = triageInput("");
+    expect(result.safe).toBe(false);
+    expect(result.reason).toMatch(/empty or whitespace-only/i);
+  });
+
+  it("rejects whitespace-only input", () => {
+    for (const input of [" ", "   ", "\t", "\n", " \n\t "]) {
+      const result = triageInput(input);
+      expect(result.safe).toBe(false);
+      expect(result.reason).toMatch(/empty or whitespace-only/i);
+    }
+  });
+
+  it("rejects malformed non-string input without throwing", () => {
+    for (const input of [null, undefined, 42, {}, [], true]) {
+      expect(() => triageInput(input)).not.toThrow();
+      const result = triageInput(input);
+      expect(result.safe).toBe(false);
+      expect(result.reason).toMatch(/malformed non-string/i);
+    }
+  });
+});
+
 describe("triageInput — safe inputs", () => {
   const safeInputs = [
     "Hello, what can you do?",
@@ -138,7 +163,6 @@ describe("triageInput — safe inputs", () => {
     "What is the data:image/png format used for?",
     "I need help with JavaScript promises",
     "Review this PR diff for me",
-    "",
   ];
 
   for (const input of safeInputs) {

@@ -53,8 +53,10 @@ cd workers/clanka-discord && npx wrangler dev   # Discord worker dev
 
 ## Conventions
 - `triageInput()` must always return `{ safe: boolean, reason?: string }` — never throw
+- Empty, whitespace-only, or non-string input must fail closed (`safe: false`) — never classify as clean
 - `SHIELD_PATTERNS` is an array of `{ pattern: RegExp, reason: string }` — add new patterns here
-- `analyzeDiff()` returns `{ modifiedFiles: string[], newExports: number, logicSummary: string }`
+- `analyzeDiff()` returns `{ modifiedFiles, newExports, logicSummary, parseStatus }` where `parseStatus` is `ok` | `empty` | `unreadable`
+- `riskScore()` returns `number | null` — `null` means empty/unreadable (not "risk 0")
 - New shared utilities go in `shared/`, with a corresponding `*.test.ts` file
 
 ## Branch Discipline

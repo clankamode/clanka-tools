@@ -25,8 +25,17 @@ export const SHIELD_PATTERNS = [
 /**
  * Multi-Pass Input Triage
  * Protects Massa's infrastructure and Clanka's internal state.
+ * Fail-closed: empty, whitespace-only, or malformed input is never "safe".
  */
-export function triageInput(input: string): { safe: boolean; reason?: string } {
+export function triageInput(input: unknown): { safe: boolean; reason?: string } {
+  // Pass 0: Presence / type guard (never throw; never allow empty as clean)
+  if (typeof input !== 'string') {
+    return { safe: false, reason: 'Input rejected: malformed non-string input.' };
+  }
+  if (input.trim().length === 0) {
+    return { safe: false, reason: 'Input rejected: empty or whitespace-only.' };
+  }
+
   // Pass 1: Pattern Matching
   for (const entry of SHIELD_PATTERNS) {
     if (entry.pattern.test(input)) {
