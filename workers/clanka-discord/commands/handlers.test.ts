@@ -425,6 +425,34 @@ describe("commandRegistry.review", () => {
     expect(response.data?.riskSummary).toBeUndefined();
   });
 
+  it("does not invent a LOW risk score for unreadable non-diff bodies", async () => {
+    vi.mocked(globalThis.fetch)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            user: { login: "octocat" },
+            title: "Garbage diff body",
+            additions: 3,
+            deletions: 1,
+          }),
+          { status: 200 }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response("not a unified diff\njust prose without headers", { status: 200 })
+      );
+
+    const response = await commandRegistry.review(
+      makeReviewInteraction("https://github.com/example/repo/pull/12")
+    );
+
+    expect(response.data?.content).toContain("PR Review: #12 in example/repo");
+    expect(response.data?.content).toContain("Diff unavailable");
+    expect(response.data?.content).toMatch(/unreadable/i);
+    expect(response.data?.content).not.toContain("**Risk:**");
+    expect(response.data?.riskSummary).toBeUndefined();
+  });
+
   it("formats a successful review payload with risk summary", async () => {
     vi.mocked(globalThis.fetch)
       .mockResolvedValueOnce(

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { analyzeDiff, riskScore } from "./spine";
+import { analyzeDiff, classifyDiff, riskScore } from "./spine";
 
 const makeGitDiff = (files: { from: string; to: string; lines: string[] }[]) => {
   return files
@@ -75,17 +75,40 @@ describe("analyzeDiff — multiple files", () => {
   });
 });
 
-describe("analyzeDiff — empty diff", () => {
-  it("returns empty result for empty string", () => {
+describe("analyzeDiff — empty vs unreadable vs no-hunks", () => {
+  it("marks empty string as empty, not zero-risk parsed", () => {
     const result = analyzeDiff("");
+    expect(result.parseStatus).toBe("empty");
     expect(result.modifiedFiles).toHaveLength(0);
     expect(result.newExports).toBe(0);
+    expect(result.logicSummary).toContain("parse-status=empty");
   });
 
-  it("returns empty result for whitespace-only diff", () => {
+  it("marks whitespace-only diff as empty", () => {
     const result = analyzeDiff("   \n\n  ");
+    expect(result.parseStatus).toBe("empty");
     expect(result.modifiedFiles).toHaveLength(0);
+    expect(result.logicSummary).toContain("parse-status=empty");
+  });
+
+  it("marks non-diff prose as unreadable", () => {
+    const result = analyzeDiff("hello world\nthis is not a diff\n+looks like a plus but no headers");
+    expect(result.parseStatus).toBe("unreadable");
+    expect(result.modifiedFiles).toHaveLength(0);
+    expect(result.logicSummary).toContain("parse-status=unreadable");
+  });
+
+  it("distinguishes parsed no-hunk diffs from empty/unreadable", () => {
+    const noHunks = [
+      "diff --git a/src/noop.ts b/src/noop.ts",
+      "--- a/src/noop.ts",
+      "+++ b/src/noop.ts",
+    ].join("\n");
+    const result = analyzeDiff(noHunks);
+    expect(result.parseStatus).toBe("ok");
+    expect(result.modifiedFiles).toContain("src/noop.ts");
     expect(result.newExports).toBe(0);
+    expect(classifyDiff(noHunks)).toBe("ok");
   });
 });
 
@@ -160,16 +183,34 @@ describe("analyzeDiff — logicSummary", () => {
   it("includes Industrial Minimalism header in summary", () => {
     const diff = makeGitDiff([{ from: "src/x.ts", to: "src/x.ts", lines: ["+export const x = 1;"] }]);
     const result = analyzeDiff(diff);
+    expect(result.parseStatus).toBe("ok");
     expect(result.logicSummary).toContain("Industrial Minimalism");
+    expect(result.logicSummary).toContain("parse-status=ok");
     expect(result.logicSummary).toContain("modified-files=1");
     expect(result.logicSummary).toContain("new-exports=1");
   });
 });
 
 describe("riskScore", () => {
-  it("returns 0 for empty diff", () => {
-    expect(riskScore("")).toBe(0);
-    expect(riskScore(" \n\t")).toBe(0);
+  it("returns null for empty or whitespace-only diff (not risk 0)", () => {
+    expect(riskScore("")).toBeNull();
+    expect(riskScore(" \n\t")).toBeNull();
+  });
+
+  it("returns null for unreadable non-diff text (not risk 0)", () => {
+    expect(riskScore("not a diff at all")).toBeNull();
+    expect(riskScore("+fake plus line without headers")).toBeNull();
+  });
+
+  it("scores parsed no-hunk diffs instead of treating them as empty", () => {
+    const noHunks = [
+      "diff --git a/src/noop.ts b/src/noop.ts",
+      "--- a/src/noop.ts",
+      "+++ b/src/noop.ts",
+    ].join("\n");
+    const score = riskScore(noHunks);
+    expect(score).not.toBeNull();
+    expect(score).toBeGreaterThanOrEqual(0);
   });
 
   it("increases as changed lines increase", () => {

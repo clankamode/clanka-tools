@@ -345,7 +345,27 @@ const commandReview: DiscordCommandHandler = async (interaction) => {
     }
 
     const analysis = analyzeDiff(diffText);
+    if (analysis.parseStatus !== 'ok') {
+      return response(
+        `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
+          `**Title:** ${title}\n` +
+          `**Author:** ${author}\n` +
+          `**Diff:** +${additions} / -${deletions}\n` +
+          `⚠️ **Diff unavailable** (${analysis.parseStatus} body). Risk was not scored from unreadable diff content.`
+      );
+    }
+
     const score = riskScore(diffText);
+    if (score === null) {
+      return response(
+        `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
+          `**Title:** ${title}\n` +
+          `**Author:** ${author}\n` +
+          `**Diff:** +${additions} / -${deletions}\n` +
+          `⚠️ **Diff unavailable** (unscorable body). Risk was not scored from missing diff content.`
+      );
+    }
+
     const riskSummary = buildRiskSummary(score);
 
     return response(

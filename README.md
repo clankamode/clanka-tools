@@ -48,6 +48,6 @@ npm run register
 ```
 
 ## Key Exports
-- `triageInput(input: string)` from `shared/shield.ts`
-- `analyzeDiff(diffText: string)` / `riskScore(diffText: string)` from `shared/spine.ts`
+- `triageInput(input: unknown)` from `shared/shield.ts` (fail-closed for empty/whitespace/non-string)
+- `analyzeDiff(diffText)` / `classifyDiff(diffText)` / `riskScore(diffText)` from `shared/spine.ts` (`riskScore` returns `null` when unscorable)
 - `createHealthCheck(opts)` from `shared/healthz.ts`

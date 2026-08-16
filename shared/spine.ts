@@ -4,11 +4,54 @@
  * Part of the "Industrial Minimalism" Reviewer Engine.
  */
 
-export function analyzeDiff(diffText: string): {
+export type DiffParseStatus = 'ok' | 'empty' | 'unreadable';
+
+export type DiffInfo = {
   modifiedFiles: string[];
   newExports: number;
   logicSummary: string;
-} {
+  /** Distinguishes parsed diffs (incl. no-hunk) from empty/unreadable input. */
+  parseStatus: DiffParseStatus;
+};
+
+/**
+ * Classify whether diff text is scorable.
+ * - empty: missing / whitespace-only / non-string
+ * - unreadable: non-empty but no unified/git diff markers
+ * - ok: recognizable diff structure (may still have zero hunks)
+ */
+export function classifyDiff(diffText: string): DiffParseStatus {
+  if (typeof diffText !== 'string' || diffText.trim().length === 0) {
+    return 'empty';
+  }
+
+  if (
+    /^diff --git /m.test(diffText) ||
+    /^\+\+\+[ \t]/m.test(diffText) ||
+    /^@@ -\d/m.test(diffText)
+  ) {
+    return 'ok';
+  }
+
+  return 'unreadable';
+}
+
+export function analyzeDiff(diffText: string): DiffInfo {
+  const parseStatus = classifyDiff(diffText);
+
+  if (parseStatus !== 'ok') {
+    return {
+      modifiedFiles: [],
+      newExports: 0,
+      logicSummary:
+        `Industrial Minimalism | ` +
+        `startup-gloss: rejected | ` +
+        `spine-logic: parse-status=${parseStatus}; modified-files=0; new-exports=0 | ` +
+        `kernel-invariants: empty-or-unreadable-diff-is-not-zero-risk`,
+      parseStatus,
+    };
+  }
+
   const { modifiedFilesSet, lines } = parseDiffMetrics(diffText);
   let newExports = 0;
 
@@ -25,15 +68,20 @@ export function analyzeDiff(diffText: string): {
   const logicSummary =
     `Industrial Minimalism | ` +
     `startup-gloss: rejected | ` +
-    `spine-logic: modified-files=${modifiedFiles.length}; new-exports=${newExports} | ` +
+    `spine-logic: parse-status=ok; modified-files=${modifiedFiles.length}; new-exports=${newExports} | ` +
     `kernel-invariants: explicit-export-delta; diff-header-bounded-file-set; additive-export-count-only`;
 
-  return { modifiedFiles, newExports, logicSummary };
+  return { modifiedFiles, newExports, logicSummary, parseStatus };
 }
 
-export function riskScore(diffText: string): number {
-  if (!diffText.trim()) {
-    return 0;
+/**
+ * Score a parsed unified/git diff from 0–100.
+ * Returns null when the input is empty or unreadable so callers cannot
+ * treat "could not score" as "no risk".
+ */
+export function riskScore(diffText: string): number | null {
+  if (classifyDiff(diffText) !== 'ok') {
+    return null;
   }
 
   const { modifiedFilesSet, changedLines } = parseDiffMetrics(diffText);
