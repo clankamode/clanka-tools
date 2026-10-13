@@ -1,5 +1,5 @@
 # TASKS.md — clanka-tools
-> Last updated: 2026-03-17 | Status: open
+> Last updated: 2026-10-13 | Status: open
 
 ## 🔴 High Priority
 - [x] **Add tests for `shared/shield.ts`** — 27 tests written and passing (2026-02-26)
@@ -37,6 +37,12 @@
 - [x] **Add shared `healthz` protocol for tool status endpoints** (2026-03-17)
   - Added `shared/healthz.ts` with `createHealthCheck()` for standard version, uptime, timestamp, and dependency status reporting.
   - Added Vitest coverage for no-dependency, degraded/down propagation, rejected dependency checks, and uptime progression.
+
+- [x] **Second-pass honesty audit leftovers** (2026-10-13)
+  - `ai-backlog-worker`: `--max-issues` no longer silently ignored; `--repo owner/name` parsed; unknown flags/`--help` fail or show help; no-PR attempts exit 1.
+  - `clanka-reviewer`: unreadable diffs return 400; deletions-only diffs omit score instead of claiming 100; unused `context` is reported as ignored.
+  - ADR-0001 timeout section documents the existing `AbortController` 5s budgets.
+  - Discord worker `npm run build` now copies `shared/healthz.ts` into `dist/` and rewrites the import (previously printed success while omitting it).
 
 ## 🟢 Low Priority / Nice to Have
 - [x] **`workers/clanka-discord` — add command registry** — typed runtime command schema and name-based lookup helpers added for dispatch/metadata reuse (2026-03-01).

@@ -23,8 +23,12 @@ await cp(resolve(workerRoot, "src", "index.ts"), resolve(distRoot, "index.ts"));
 await cp(resolve(workerRoot, "commands", "registry.ts"), resolve(distRoot, "commands", "registry.ts"));
 await cp(resolve(repoRoot, "shared", "shield.ts"), resolve(distRoot, "shared", "shield.ts"));
 await cp(resolve(repoRoot, "shared", "spine.ts"), resolve(distRoot, "shared", "spine.ts"));
+await cp(resolve(repoRoot, "shared", "healthz.ts"), resolve(distRoot, "shared", "healthz.ts"));
 
-await rewriteFile(resolve(distRoot, "index.ts"), [["../commands/registry", "./commands/registry"]]);
+await rewriteFile(resolve(distRoot, "index.ts"), [
+  ["../commands/registry", "./commands/registry"],
+  ["../../../shared/healthz", "./shared/healthz"],
+]);
 await rewriteFile(resolve(distRoot, "commands", "registry.ts"), [
   ["../../../shared/spine", "../shared/spine"],
   ["../../../shared/shield", "../shared/shield"],

@@ -1,3 +1,5 @@
+import { classifyDiff } from '../../../shared/spine';
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 const VERSION = '1.0.0';
 
@@ -17,7 +19,8 @@ interface ReviewIssue {
 interface ReviewResponseBody {
   summary: string;
   issues: ReviewIssue[];
-  score: number;
+  /** Null when the heuristic scan did not run (no added lines). */
+  score: number | null;
 }
 
 interface HealthResponseBody {
@@ -55,6 +58,14 @@ async function handleReview(request: Request): Promise<Response> {
     return jsonResponse({ error: parsedBody.error }, 400);
   }
 
+  const parseStatus = classifyDiff(parsedBody.value.diff);
+  if (parseStatus !== 'ok') {
+    return jsonResponse(
+      { error: `Body.diff is not a recognizable unified/git diff (${parseStatus}).` },
+      400,
+    );
+  }
+
   const review = runHeuristicReview(parsedBody.value.diff, parsedBody.value.context);
   return jsonResponse<ReviewResponseBody>(review);
 }
@@ -85,9 +96,19 @@ function parseReviewRequestBody(
 }
 
 function runHeuristicReview(diff: string, context?: string): ReviewResponseBody {
+  const contextNote = ignoredContextNote(context);
   const issues: ReviewIssue[] = [];
   const diffLines = diff.split(/\r?\n/);
   const addedLines = extractAddedLines(diffLines);
+
+  if (addedLines.length === 0) {
+    return {
+      summary:
+        `No added lines in diff; heuristic review did not run. Score omitted because nothing was scanned.${contextNote}`,
+      issues: [],
+      score: null,
+    };
+  }
 
   addTodoFixmeIssues(addedLines, issues);
   addConsoleLogIssues(addedLines, issues);
@@ -97,7 +118,7 @@ function runHeuristicReview(diff: string, context?: string): ReviewResponseBody 
   addLongFunctionIssues(addedLines, issues);
 
   const score = scoreFromIssues(issues);
-  const summary = buildSummary(issues, score, Boolean(context && context.trim()));
+  const summary = `${buildSummary(issues, score)}${contextNote}`;
 
   return { summary, issues, score };
 }
@@ -279,11 +300,13 @@ function scoreFromIssues(issues: ReviewIssue[]): number {
   return Math.max(0, 100 - totalPenalty);
 }
 
-function buildSummary(issues: ReviewIssue[], score: number, hasContext: boolean): string {
+function ignoredContextNote(context?: string): string {
+  return context && context.trim() ? ' Caller-supplied context was ignored.' : '';
+}
+
+function buildSummary(issues: ReviewIssue[], score: number): string {
   if (issues.length === 0) {
-    return hasContext
-      ? `No heuristic issues found in diff. Context provided. Score: ${score}/100.`
-      : `No heuristic issues found in diff. Score: ${score}/100.`;
+    return `No heuristic issues found in diff. Score: ${score}/100.`;
   }
 
   const counts = issues.reduce(
@@ -294,8 +317,7 @@ function buildSummary(issues: ReviewIssue[], score: number, hasContext: boolean)
     { critical: 0, warning: 0, info: 0 } as Record<Severity, number>,
   );
 
-  const contextLabel = hasContext ? ' Context considered.' : '';
-  return `Found ${issues.length} issue(s): ${counts.critical} critical, ${counts.warning} warning, ${counts.info} info. Score: ${score}/100.${contextLabel}`;
+  return `Found ${issues.length} issue(s): ${counts.critical} critical, ${counts.warning} warning, ${counts.info} info. Score: ${score}/100.`;
 }
 
 function jsonResponse<T>(payload: T, status = 200): Response {

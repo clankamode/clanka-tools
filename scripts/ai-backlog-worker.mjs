@@ -22,35 +22,146 @@
  *   DEEPSEEK_API_KEY=... \
  *   node ai-backlog-worker.mjs
  *
- *   --dry-run        Pick + log but don't spawn agent or open PR
- *   --max-issues N   Override (default 1)
- *   --repo X/Y       Override env REPO
+ *   --dry-run          Pick + log but don't spawn agent or open PR
+ *   --repo owner/name  Override AI_BACKLOG_REPO (also --repo=owner/name)
+ *   --max-issues N     Only N=1 is accepted (hard bound: at most 1 issue per run)
+ *   --help             Show this help
  */
 
 import { execSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, writeFileSync, mkdirSync, readFileSync, unlinkSync, statSync } from "node:fs";
+import { existsSync, writeFileSync, mkdirSync, readFileSync, unlinkSync, statSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const DRY_RUN = process.argv.includes("--dry-run");
-const MAX_ISSUES = Number(
-  (process.argv.find((a) => a.startsWith("--max-issues=")) || "=1").split("=")[1] || 1,
-);
-const REPO =
-  (process.argv.find((a) => a.startsWith("--repo=")) || "").split("=")[1] ||
-  process.env.AI_BACKLOG_REPO ||
-  "clankamode/exterior-crm";
+export const MAX_ISSUES_HARD_BOUND = 1;
+const DEFAULT_REPO = "clankamode/exterior-crm";
 
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK_URL;
 const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY;
 const COOLDOWN_DAYS = 7;
 const MAX_WALL_CLOCK_MS = 30 * 60 * 1000;
 
-const LOCK_FILE = `/tmp/ai-backlog-${REPO.replace("/", "-")}.lock`;
 const TODAY = new Date().toISOString().slice(0, 10);
 const LOG_DIR = join(homedir(), ".cache", "ai-backlog-worker");
 mkdirSync(LOG_DIR, { recursive: true });
 const LOG_PATH = join(LOG_DIR, `${TODAY}.log`);
+
+export function usageText() {
+  return [
+    "Usage: node ai-backlog-worker.mjs [--dry-run] [--repo owner/name] [--max-issues 1] [--help]",
+    "",
+    "  --dry-run          Pick + log but don't spawn agent or open PR",
+    "  --repo owner/name  Override AI_BACKLOG_REPO (also --repo=owner/name)",
+    "  --max-issues N     Only N=1 is accepted (hard bound: at most 1 issue per run)",
+    "  --help             Show this help",
+  ].join("\n");
+}
+
+/**
+ * @param {string[]} argv
+ * @param {number} index
+ * @param {string} name
+ * @returns {{ error: string } | { value: string, nextIndex: number }}
+ */
+function takeFlagValue(argv, index, name) {
+  const arg = argv[index];
+  const prefix = `${name}=`;
+  if (arg.startsWith(prefix)) {
+    const value = arg.slice(prefix.length);
+    if (!value) {
+      return { error: `${name} requires a value` };
+    }
+    return { value, nextIndex: index };
+  }
+  const value = argv[index + 1];
+  if (value === undefined || value.startsWith("-")) {
+    return { error: `${name} requires a value` };
+  }
+  return { value, nextIndex: index + 1 };
+}
+
+/**
+ * @param {string[]} [argv]
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {{ ok: true, help: true } | { ok: true, help: false, dryRun: boolean, maxIssues: number, repo: string } | { ok: false, error: string }}
+ */
+export function parseCliArgs(argv = [], env = process.env) {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    return { ok: true, help: true };
+  }
+
+  let dryRun = false;
+  let maxIssues = MAX_ISSUES_HARD_BOUND;
+  let repo =
+    (typeof env.AI_BACKLOG_REPO === "string" && env.AI_BACKLOG_REPO.trim()) ||
+    DEFAULT_REPO;
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--dry-run") {
+      dryRun = true;
+      continue;
+    }
+    if (arg === "--max-issues" || arg.startsWith("--max-issues=")) {
+      const taken = takeFlagValue(argv, i, "--max-issues");
+      if ("error" in taken) {
+        return { ok: false, error: taken.error };
+      }
+      i = taken.nextIndex;
+      const parsed = Number(taken.value);
+      if (!Number.isInteger(parsed) || parsed < 1) {
+        return {
+          ok: false,
+          error: `--max-issues must be a positive integer (got ${taken.value})`,
+        };
+      }
+      if (parsed !== MAX_ISSUES_HARD_BOUND) {
+        return {
+          ok: false,
+          error: `--max-issues=${parsed} is not supported; this worker processes at most ${MAX_ISSUES_HARD_BOUND} issue per run.`,
+        };
+      }
+      maxIssues = parsed;
+      continue;
+    }
+    if (arg === "--repo" || arg.startsWith("--repo=")) {
+      const taken = takeFlagValue(argv, i, "--repo");
+      if ("error" in taken) {
+        return { ok: false, error: taken.error };
+      }
+      i = taken.nextIndex;
+      if (!/^[^/\s]+\/[^/\s]+$/.test(taken.value)) {
+        return {
+          ok: false,
+          error: `--repo must be owner/name (got ${taken.value})`,
+        };
+      }
+      repo = taken.value;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      return {
+        ok: false,
+        error: `Unknown flag: ${arg}. ${usageText().split("\n")[0]}`,
+      };
+    }
+    return { ok: false, error: `Unexpected argument: ${arg}` };
+  }
+
+  return { ok: true, help: false, dryRun, maxIssues, repo };
+}
+
+/**
+ * @param {{ prUrl: string | null, dryRun: boolean, hadIssue: boolean }} outcome
+ * @returns {0 | 1}
+ */
+export function exitCodeAfterAttempt(outcome) {
+  if (outcome.dryRun || !outcome.hadIssue) {
+    return 0;
+  }
+  return outcome.prUrl ? 0 : 1;
+}
 
 function log(msg) {
   const line = `[${new Date().toISOString()}] ${msg}`;
@@ -84,26 +195,27 @@ async function discord(content, embed) {
 }
 
 // ─── lock ──────────────────────────────────────────────────────────────────
-function acquireLock() {
-  if (existsSync(LOCK_FILE)) {
-    const age = Date.now() - statSync(LOCK_FILE).mtimeMs;
+function acquireLock(lockFile) {
+  if (existsSync(lockFile)) {
+    const age = Date.now() - statSync(lockFile).mtimeMs;
     // stale > 24h → reclaim
     if (age < 24 * 60 * 60 * 1000) {
-      const owner = readFileSync(LOCK_FILE, "utf8");
+      const owner = readFileSync(lockFile, "utf8");
       throw new Error(`lock held: ${owner} (age ${Math.round(age / 1000 / 60)}min)`);
     }
     log(`reclaiming stale lock (${Math.round(age / 1000 / 60)}min old)`);
   }
-  writeFileSync(LOCK_FILE, `${process.pid} ${new Date().toISOString()}`);
+  writeFileSync(lockFile, `${process.pid} ${new Date().toISOString()}`);
 }
-function releaseLock() {
-  try { unlinkSync(LOCK_FILE); } catch {}
+function releaseLock(lockFile) {
+  if (!lockFile) return;
+  try { unlinkSync(lockFile); } catch {}
 }
 
 // ─── issue selection ──────────────────────────────────────────────────────
-function pickIssue() {
+function pickIssue(repo, maxIssues) {
   const raw = sh(
-    `gh issue list --repo ${REPO} ` +
+    `gh issue list --repo ${repo} ` +
       `--label ai-pickup-eligible ` +
       `--state open ` +
       `--limit 50 ` +
@@ -135,15 +247,15 @@ function pickIssue() {
     if (aLen !== bLen) return aLen - bLen;
     return new Date(a.createdAt) - new Date(b.createdAt);
   });
-  return eligible[0] || null;
+  return eligible.slice(0, maxIssues)[0] || null;
 }
 
 // ─── agent prompt ─────────────────────────────────────────────────────────
-function buildPrompt(issue, branch, worktree) {
+function buildPrompt(issue, branch, worktree, repo) {
   return `CONTEXT
-You are an autonomous backlog worker. You have been spawned to attempt issue #${issue.number} from ${REPO}.
+You are an autonomous backlog worker. You have been spawned to attempt issue #${issue.number} from ${repo}.
 
-REPO: ${REPO}
+REPO: ${repo}
 BRANCH: ${branch} (already created off origin/main)
 WORKTREE: ${worktree}
 
@@ -227,37 +339,56 @@ function spawnAgent(prompt, worktree, deadline) {
 
 // ─── main ─────────────────────────────────────────────────────────────────
 async function main() {
-  log(`AI Backlog Worker starting (repo=${REPO}, dryRun=${DRY_RUN})`);
-  acquireLock();
+  const parsed = parseCliArgs(process.argv.slice(2));
+  if (!parsed.ok) {
+    log(parsed.error);
+    process.exitCode = 1;
+    return;
+  }
+  if (parsed.help) {
+    console.log(usageText());
+    return;
+  }
+
+  const { dryRun, repo, maxIssues } = parsed;
+  const lockFile = `/tmp/ai-backlog-${repo.replace("/", "-")}.lock`;
+  let exitCode = 0;
+
+  log(
+    `AI Backlog Worker starting (repo=${repo}, dryRun=${dryRun}, maxIssues=${maxIssues})`,
+  );
+  acquireLock(lockFile);
 
   try {
-    const issue = pickIssue();
+    const issue = pickIssue(repo, maxIssues);
     if (!issue) {
       log("no eligible issues — done");
-      await discord(`🌙 AI backlog worker: no eligible issues in **${REPO}** tonight.`);
+      await discord(`🌙 AI backlog worker: no eligible issues in **${repo}** tonight.`);
+      exitCode = exitCodeAfterAttempt({ prUrl: null, dryRun, hadIssue: false });
       return;
     }
     log(`picked issue #${issue.number}: ${issue.title}`);
 
-    if (DRY_RUN) {
+    if (dryRun) {
       log("--dry-run, stopping");
       await discord(
-        `🔍 AI backlog worker dry-run: would attempt **#${issue.number}** ${issue.title}\n${REPO}#${issue.number}`,
+        `🔍 AI backlog worker dry-run: would attempt **#${issue.number}** ${issue.title}\n${repo}#${issue.number}`,
       );
+      exitCode = exitCodeAfterAttempt({ prUrl: null, dryRun: true, hadIssue: true });
       return;
     }
 
     // worktree
-    const repoLocal = `${homedir()}/repos/${REPO.split("/")[1]}`;
+    const repoLocal = `${homedir()}/repos/${repo.split("/")[1]}`;
     if (!existsSync(repoLocal)) throw new Error(`local repo not cloned: ${repoLocal}`);
     sh(`git -C ${repoLocal} fetch origin --quiet`);
-    const wtPath = `/tmp/ai-backlog-${REPO.replace("/", "-")}-${issue.number}-${Date.now()}`;
+    const wtPath = `/tmp/ai-backlog-${repo.replace("/", "-")}-${issue.number}-${Date.now()}`;
     const branch = `ai-backlog/${issue.number}-${TODAY}`;
     sh(`git -C ${repoLocal} worktree add ${wtPath} -b ${branch} origin/main`);
     log(`worktree at ${wtPath} on ${branch}`);
 
     const deadline = Date.now() + MAX_WALL_CLOCK_MS;
-    const prompt = buildPrompt(issue, branch, wtPath);
+    const prompt = buildPrompt(issue, branch, wtPath, repo);
 
     let result;
     try {
@@ -273,7 +404,7 @@ async function main() {
     let prUrl = null;
     try {
       const prs = JSON.parse(
-        sh(`gh pr list --repo ${REPO} --head ${branch} --json number,url --state open`),
+        sh(`gh pr list --repo ${repo} --head ${branch} --json number,url --state open`),
       );
       if (prs[0]) prUrl = prs[0].url;
     } catch {}
@@ -286,9 +417,9 @@ async function main() {
     } else {
       log(`failure: no PR opened`);
       try {
-        sh(`gh issue edit ${issue.number} --repo ${REPO} --add-label ai-pickup-failed`);
+        sh(`gh issue edit ${issue.number} --repo ${repo} --add-label ai-pickup-failed`);
         sh(
-          `gh issue comment ${issue.number} --repo ${REPO} --body "AI backlog worker attempted ${TODAY} and failed (exit=${result.code}${
+          `gh issue comment ${issue.number} --repo ${repo} --body "AI backlog worker attempted ${TODAY} and failed (exit=${result.code}${
             result.timedOut ? ", timed out" : ""
           }). Cooldown 7d."`,
         );
@@ -298,21 +429,29 @@ async function main() {
       await discord(
         `⚠️ AI backlog worker failed on **#${issue.number}** ${issue.title}\nExit ${result.code}${
           result.timedOut ? " (timed out)" : ""
-        }. Logged + cooled down 7d.\n${REPO}#${issue.number}`,
+        }. Logged + cooled down 7d.\n${repo}#${issue.number}`,
       );
     }
+
+    exitCode = exitCodeAfterAttempt({ prUrl, dryRun: false, hadIssue: true });
 
     // cleanup worktree
     try { sh(`git -C ${repoLocal} worktree remove --force ${wtPath}`); } catch {}
   } finally {
-    releaseLock();
-    log("done");
+    releaseLock(lockFile);
+    log(exitCode ? "finished with errors" : "done");
+    process.exitCode = exitCode;
   }
 }
 
-main().catch(async (e) => {
-  log(`FATAL: ${e.message}`);
-  await discord(`💥 AI backlog worker crashed: ${e.message}`);
-  releaseLock();
-  process.exit(1);
-});
+const isMain =
+  Boolean(process.argv[1]) &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  main().catch(async (e) => {
+    log(`FATAL: ${e.message}`);
+    await discord(`💥 AI backlog worker crashed: ${e.message}`);
+    process.exit(1);
+  });
+}

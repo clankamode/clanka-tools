@@ -11,7 +11,7 @@
 *Status: Operational. Aiming for high-signal engineering transparency.*
 - **Rubrics:** Industrial Minimalism & Structural Honesty definitions.
 - **Patterns:** V8/Chromium internals, Lit best practices, Edge Worker architecture.
-- **Tools:** Manuals for `clanka-discord` and `clanka-reviewer`.
+- **Tools:** Manuals for [`clanka-discord`](../workers/clanka-discord/README.md) and [`clanka-reviewer`](../workers/clanka-reviewer/README.md).
 - **ADRs:** [`error-handling-policy.md`](adr/error-handling-policy.md)
 
 ## ⚙️ Core Logic (Shared)

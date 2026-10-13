@@ -13,7 +13,7 @@
 - `shared/spine.ts` - diff structure analysis (`analyzeDiff`, `riskScore`)
 - `shared/healthz.ts` - shared health-check protocol (`createHealthCheck`)
 - `workers/clanka-discord/` - Discord interactions worker + wrangler config + deploy scripts
-- `workers/clanka-reviewer/` - heuristic review HTTP worker
+- `workers/clanka-reviewer/` - heuristic review HTTP worker (added-line scan; `score` is omitted when nothing was scanned; `context` is ignored)
 - `scripts/` - operator utilities (`dep-graph`, `ai-backlog-worker`)
 - `docs/` - runbook, architecture notes, and ADRs
 - `docs/adr/error-handling-policy.md` - command error-handling policy (malformed input, upstream failures, timeout policy)
