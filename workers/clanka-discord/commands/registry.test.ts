@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRiskSummary,
@@ -342,5 +345,21 @@ describe("runtime command handlers", () => {
     expect(response.data?.riskSummary?.score).toBeTypeOf("number");
     expect(response.data?.riskSummary?.reasons.length).toBeGreaterThan(0);
     expect(["low", "medium", "high"]).toContain(response.data?.riskSummary?.level);
+  });
+});
+
+describe("error-handling ADR honesty", () => {
+  it("documents the AbortController timeouts used by /review and /feedback", () => {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const adr = readFileSync(
+      path.resolve(here, "../../../docs/adr/error-handling-policy.md"),
+      "utf8",
+    );
+    const registry = readFileSync(path.join(here, "registry.ts"), "utf8");
+
+    expect(registry).toContain("AbortController");
+    expect(adr).toContain("AbortController");
+    expect(adr).toMatch(/5s/);
+    expect(adr).not.toMatch(/There is currently no command-specific timeout wrapper/);
   });
 });

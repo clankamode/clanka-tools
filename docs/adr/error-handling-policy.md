@@ -11,7 +11,7 @@ The Discord worker executes commands through a small registry and must fail safe
 
 1. Separate malformed input from runtime failures.
 2. Map recoverable upstream failures to a deterministic user-facing message.
-3. Keep timeout handling explicit at the command level as a known gap.
+3. Keep timeout handling explicit at the command level (`AbortController` + per-call time budget).
 
 ## Policy
 
@@ -58,11 +58,9 @@ Current mapping:
 
 ### 3) Timeout behavior
 
-- There is currently no command-specific timeout wrapper (`AbortController`/`setTimeout`) in `registry.ts`.
-- Timeouts are therefore governed by the runtime environment and upstream APIs’ behavior.
-- ADR outcome: this is accepted as-is for now, and any future reliability work should introduce
-  - explicit per-upstream time budget.
-  - a timeout branch that returns the same service-unavailable pattern used for other upstream failures.
+- `/review` and `/feedback` wrap upstream `fetch` calls with `AbortController` and a 5s `setTimeout` in `registry.ts`.
+- Aborted or timed-out fetches map to the same service-unavailable message as other upstream failures.
+- ADR outcome: command-level time budgets exist for current GitHub and Supabase calls; new upstream IO should reuse this pattern.
 
 ## Consequences
 
@@ -71,4 +69,4 @@ Current mapping:
 - Any new command touching network IO should implement the same three-step classification:
   1. validate/sanitize input,
   2. handle external failures with a stable user-facing response,
-  3. choose whether to keep relying on runtime timeouts or introduce command-level timeout guards.
+  3. wrap upstream fetches with a command-level `AbortController` time budget.
