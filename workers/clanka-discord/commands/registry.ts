@@ -60,21 +60,23 @@ export interface RiskSummary {
   reasons: string[];
 }
 
-export interface PrUrlValidationResult {
-  valid: boolean;
-  error?: string;
-}
+export type PrUrlValidationResult =
+  | {
+      valid: true;
+      owner: string;
+      repo: string;
+      pull_number: string;
+    }
+  | {
+      valid: false;
+      error: string;
+    };
 
 export type ParsedCommandOptions =
   | {
       valid: true;
       command: 'review';
       args: { pr_url: string };
-    }
-  | {
-      valid: true;
-      command: 'scan';
-      args: { repo: string };
     }
   | {
       valid: false;
@@ -153,11 +155,12 @@ export function validatePrUrl(url: string): PrUrlValidationResult {
     return { valid: false, error: 'Missing pull request number in URL.' };
   }
 
-  if (!parseGitHubPrUrl(url)) {
+  const parsed = parseGitHubPrUrl(url);
+  if (!parsed) {
     return { valid: false, error: 'Invalid GitHub PR URL.' };
   }
 
-  return { valid: true };
+  return { valid: true, ...parsed };
 }
 
 export function parseCommandOptions(
@@ -177,14 +180,6 @@ export function parseCommandOptions(
       return { valid: false, error: 'Missing or invalid `pr_url` argument.' };
     }
     return { valid: true, command: 'review', args: { pr_url: prUrl } };
-  }
-
-  if (commandName === 'scan') {
-    const repo = pickOption('repo');
-    if (!repo || typeof repo !== 'string') {
-      return { valid: false, error: 'Missing or invalid `repo` argument.' };
-    }
-    return { valid: true, command: 'scan', args: { repo } };
   }
 
   return {
@@ -260,12 +255,7 @@ const commandReview: DiscordCommandHandler = async (interaction) => {
     if (!validation.valid) {
       return response(`❌ ${validation.error}`);
     }
-
-    const parsedPrUrl = parseGitHubPrUrl(prUrl);
-    if (!parsedPrUrl) {
-      return response('❌ Invalid GitHub PR URL.');
-    }
-    const { owner, repo, pull_number } = parsedPrUrl;
+    const { owner, repo, pull_number } = validation;
     const authHeaders = {
       Authorization: `Bearer ${interaction.env?.GITHUB_TOKEN}`,
       'User-Agent': 'Clanka-Discord',
@@ -356,17 +346,8 @@ const commandReview: DiscordCommandHandler = async (interaction) => {
     }
 
     const score = riskScore(diffText);
-    if (score === null) {
-      return response(
-        `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +
-          `**Title:** ${title}\n` +
-          `**Author:** ${author}\n` +
-          `**Diff:** +${additions} / -${deletions}\n` +
-          `⚠️ **Diff unavailable** (unscorable body). Risk was not scored from missing diff content.`
-      );
-    }
-
-    const riskSummary = buildRiskSummary(score);
+    // analyzeDiff already required classifyDiff === 'ok'; riskScore is then 0–100.
+    const riskSummary = buildRiskSummary(score as number);
 
     return response(
       `🔍 **PR Review: #${pull_number} in ${owner}/${repo}**\n` +

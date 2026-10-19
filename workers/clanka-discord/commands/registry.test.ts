@@ -31,6 +31,18 @@ describe("validatePrUrl", () => {
   it("accepts a valid GitHub pull request URL", () => {
     expect(validatePrUrl("https://github.com/example/repo/pull/123")).toEqual({
       valid: true,
+      owner: "example",
+      repo: "repo",
+      pull_number: "123",
+    });
+  });
+
+  it("returns parsed owner/repo/number for www.github.com PR URLs", () => {
+    expect(validatePrUrl("https://www.github.com/example/repo/pull/21")).toEqual({
+      valid: true,
+      owner: "example",
+      repo: "repo",
+      pull_number: "21",
     });
   });
 
@@ -78,14 +90,14 @@ describe("parseCommandOptions", () => {
     });
   });
 
-  it("parses /scan command options and returns repo", () => {
+  it("treats leftover /scan as an unknown command", () => {
     const parsed = parseCommandOptions("scan", [{ name: "repo", value: "example/repo" }]);
-
-    expect(parsed).toEqual({
-      valid: true,
-      command: "scan",
-      args: { repo: "example/repo" },
-    });
+    expect(parsed.valid).toBe(false);
+    if (parsed.valid) {
+      throw new Error("Expected parseCommandOptions to reject /scan");
+    }
+    expect(parsed.error).toContain("Unknown command `/scan`");
+    expect(parsed.error).toContain("/help");
   });
 
   it("returns a helpful error for unknown commands", () => {
@@ -123,15 +135,6 @@ describe("parseCommandOptions", () => {
       throw new Error("Expected /review to reject non-string pr_url");
     }
     expect(parsed.error).toBe("Missing or invalid `pr_url` argument.");
-  });
-
-  it("returns an error when /scan omits repo", () => {
-    const parsed = parseCommandOptions("scan", []);
-    expect(parsed.valid).toBe(false);
-    if (parsed.valid) {
-      throw new Error("Expected /scan to reject missing repo");
-    }
-    expect(parsed.error).toBe("Missing or invalid `repo` argument.");
   });
 });
 
