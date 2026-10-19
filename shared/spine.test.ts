@@ -202,6 +202,19 @@ describe("riskScore", () => {
     expect(riskScore("+fake plus line without headers")).toBeNull();
   });
 
+  it("returns a number whenever classifyDiff reports ok", () => {
+    const okDiffs = [
+      "diff --git a/src/a.ts b/src/a.ts\n",
+      "+++ b/src/a.ts\n+const x = 1;\n",
+      "@@ -1 +1 @@\n-old\n+new\n",
+    ];
+
+    for (const diff of okDiffs) {
+      expect(classifyDiff(diff)).toBe("ok");
+      expect(riskScore(diff)).not.toBeNull();
+    }
+  });
+
   it("scores parsed no-hunk diffs instead of treating them as empty", () => {
     const noHunks = [
       "diff --git a/src/noop.ts b/src/noop.ts",

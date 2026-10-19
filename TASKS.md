@@ -1,5 +1,5 @@
 # TASKS.md — clanka-tools
-> Last updated: 2026-10-13 | Status: open
+> Last updated: 2026-10-19 | Status: open
 
 ## 🔴 High Priority
 - [x] **Add tests for `shared/shield.ts`** — 27 tests written and passing (2026-02-26)
@@ -43,6 +43,11 @@
   - `clanka-reviewer`: unreadable diffs return 400; deletions-only diffs omit score instead of claiming 100; unused `context` is reported as ignored.
   - ADR-0001 timeout section documents the existing `AbortController` 5s budgets.
   - Discord worker `npm run build` now copies `shared/healthz.ts` into `dist/` and rewrites the import (previously printed success while omitting it).
+
+- [x] **Weekly dead-code pass** (2026-10-19)
+  - Removed leftover `/scan` option-parser branch (no registry/handler/register.js/help consumer).
+  - Unified `/review` GitHub PR URL parse so `validatePrUrl` returns owner/repo/number (deleted second parse + unreachable miss branch).
+  - Removed unreachable `riskScore === null` branch after `analyzeDiff.parseStatus === 'ok'`.
 
 ## 🟢 Low Priority / Nice to Have
 - [x] **`workers/clanka-discord` — add command registry** — typed runtime command schema and name-based lookup helpers added for dispatch/metadata reuse (2026-03-01).
