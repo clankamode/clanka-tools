@@ -213,6 +213,34 @@ function releaseLock(lockFile) {
 }
 
 // ─── issue selection ──────────────────────────────────────────────────────
+/**
+ * Fail-closed eligibility: an `ai-pickup-failed` label without a parseable
+ * last-comment timestamp is treated as still in cooldown, not as "retry now".
+ *
+ * @param {{ labels?: Array<{ name?: string }>, comments?: unknown }} issue
+ * @param {number} [now]
+ * @returns {boolean}
+ */
+export function isIssueEligible(issue, now = Date.now()) {
+  const labels = issue.labels.map((l) => l.name);
+  if (labels.includes("customer-impacting")) return false;
+  if (labels.includes("secrets")) return false;
+  if (labels.includes("do-not-ai")) return false;
+  if (labels.includes("needs-discussion")) return false;
+  if (labels.includes("ai-pickup-failed")) {
+    if (!Array.isArray(issue.comments) || issue.comments.length === 0) {
+      return false;
+    }
+    const lastComment = issue.comments[issue.comments.length - 1];
+    const ageDays =
+      (now - new Date(lastComment?.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (!Number.isFinite(ageDays) || ageDays < COOLDOWN_DAYS) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function pickIssue(repo, maxIssues) {
   const raw = sh(
     `gh issue list --repo ${repo} ` +
@@ -222,24 +250,7 @@ function pickIssue(repo, maxIssues) {
       `--json number,title,body,labels,createdAt,comments`,
   );
   const issues = JSON.parse(raw);
-  const eligible = issues.filter((i) => {
-    const labels = i.labels.map((l) => l.name);
-    if (labels.includes("customer-impacting")) return false;
-    if (labels.includes("secrets")) return false;
-    if (labels.includes("do-not-ai")) return false;
-    if (labels.includes("needs-discussion")) return false;
-    // cooldown: if labeled ai-pickup-failed, skip for COOLDOWN_DAYS
-    if (labels.includes("ai-pickup-failed")) {
-      const lastComment = i.comments?.slice(-1)[0];
-      if (lastComment) {
-        const ageDays =
-          (Date.now() - new Date(lastComment.createdAt).getTime()) /
-          (1000 * 60 * 60 * 24);
-        if (ageDays < COOLDOWN_DAYS) return false;
-      }
-    }
-    return true;
-  });
+  const eligible = issues.filter((i) => isIssueEligible(i));
   // sort: shortest body first (smaller scope) then oldest
   eligible.sort((a, b) => {
     const aLen = (a.body || "").length;

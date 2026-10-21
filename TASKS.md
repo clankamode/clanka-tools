@@ -1,5 +1,5 @@
 # TASKS.md — clanka-tools
-> Last updated: 2026-10-19 | Status: open
+> Last updated: 2026-10-21 | Status: open
 
 ## 🔴 High Priority
 - [x] **Add tests for `shared/shield.ts`** — 27 tests written and passing (2026-02-26)
@@ -43,6 +43,11 @@
   - `clanka-reviewer`: unreadable diffs return 400; deletions-only diffs omit score instead of claiming 100; unused `context` is reported as ignored.
   - ADR-0001 timeout section documents the existing `AbortController` 5s budgets.
   - Discord worker `npm run build` now copies `shared/healthz.ts` into `dist/` and rewrites the import (previously printed success while omitting it).
+
+- [x] **Second-pass honesty leftovers after #60** (2026-10-21)
+  - `register.js`: unknown flags (`--dry-run`, `--guild`) fail instead of PUTting Discord commands; HTTP 200 with a non-JSON or non-list body is no longer reported as success.
+  - `dep-graph`: `--help`/unknown flags no longer write `docs/dep-graph.dot`; collector includes `workers/*/commands` so Discord shield/spine edges are visible.
+  - `ai-backlog-worker`: `ai-pickup-failed` without a parseable last-comment timestamp stays in cooldown (fail-closed) instead of being retried immediately.
 
 - [x] **Weekly dead-code pass** (2026-10-19)
   - Removed leftover `/scan` option-parser branch (no registry/handler/register.js/help consumer).

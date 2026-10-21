@@ -33,11 +33,18 @@ const COMMANDS = [
   }
 ];
 
+const KNOWN_FLAGS = new Set(['--json', '--help', '-h']);
+const USAGE = 'Usage: node scripts/register.js [--json]';
+
 function parseCliArgs(argv = process.argv.slice(2)) {
   return {
     json: argv.includes('--json'),
     help: argv.includes('--help') || argv.includes('-h'),
   };
+}
+
+function firstUnknownFlag(argv = []) {
+  return argv.find((arg) => arg.startsWith('-') && !KNOWN_FLAGS.has(arg));
 }
 
 function printJson(log, payload) {
@@ -55,21 +62,31 @@ async function registerCommands({
   const flags = parseCliArgs(argv);
 
   if (flags.help) {
-    const usage = 'Usage: node scripts/register.js [--json]';
     if (flags.json) {
       printJson(log, {
         ok: true,
-        usage,
+        usage: USAGE,
         options: ['--json', '--help'],
         commands: COMMANDS.map((command) => command.name),
       });
     } else {
-      log(usage);
+      log(USAGE);
       log('Options:');
       log('  --json   Output machine-readable JSON result');
       log('  --help   Show this help');
     }
     return { ok: true, help: true };
+  }
+
+  const unknownFlag = firstUnknownFlag(argv);
+  if (unknownFlag) {
+    const error = `Unknown flag: ${unknownFlag}. ${USAGE}`;
+    if (flags.json) {
+      printJson(log, { ok: false, error });
+    } else {
+      errorLog(error);
+    }
+    return { ok: false, error };
   }
 
   if (!applicationId || !token) {
@@ -107,11 +124,31 @@ async function registerCommands({
   }
 
   if (response.ok) {
-    let data = null;
+    let data;
     try {
       data = await response.json();
     } catch {
-      data = null;
+      const error =
+        'Discord returned HTTP 200 but a non-JSON body; registration result could not be verified.';
+      if (flags.json) {
+        printJson(log, { ok: false, status: response.status, error });
+      } else {
+        errorLog('Error registering commands');
+        errorLog(error);
+      }
+      return { ok: false, status: response.status, error };
+    }
+
+    if (!Array.isArray(data)) {
+      const error =
+        'Discord returned HTTP 200 but the body was not a command list; registration result could not be verified.';
+      if (flags.json) {
+        printJson(log, { ok: false, status: response.status, error });
+      } else {
+        errorLog('Error registering commands');
+        errorLog(error);
+      }
+      return { ok: false, status: response.status, error };
     }
 
     if (flags.json) {

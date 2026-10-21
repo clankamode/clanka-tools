@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   exitCodeAfterAttempt,
+  isIssueEligible,
   parseCliArgs,
   usageText,
   MAX_ISSUES_HARD_BOUND,
@@ -60,6 +61,59 @@ describe("ai-backlog-worker CLI honesty", () => {
     expect(parsed.help).toBe(true);
     expect(usageText()).toMatch(/--dry-run/);
     expect(usageText()).toMatch(/at most 1 issue/i);
+  });
+});
+
+describe("ai-backlog-worker pickup cooldown honesty", () => {
+  const now = Date.parse("2026-10-21T00:00:00.000Z");
+  const eligibleLabels = [{ name: "ai-pickup-eligible" }];
+
+  it("does not retry ai-pickup-failed issues when comments are missing", () => {
+    expect(
+      isIssueEligible(
+        { labels: [...eligibleLabels, { name: "ai-pickup-failed" }], comments: [] },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isIssueEligible(
+        { labels: [...eligibleLabels, { name: "ai-pickup-failed" }] },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not treat an unparseable comment timestamp as cooldown expiry", () => {
+    expect(
+      isIssueEligible(
+        {
+          labels: [...eligibleLabels, { name: "ai-pickup-failed" }],
+          comments: [{ createdAt: "not-a-date" }],
+        },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("still retries after the cooldown window when the last comment is old enough", () => {
+    expect(
+      isIssueEligible(
+        {
+          labels: [...eligibleLabels, { name: "ai-pickup-failed" }],
+          comments: [{ createdAt: "2026-10-10T00:00:00.000Z" }],
+        },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      isIssueEligible(
+        {
+          labels: [...eligibleLabels, { name: "ai-pickup-failed" }],
+          comments: [{ createdAt: "2026-10-16T00:00:00.000Z" }],
+        },
+        now,
+      ),
+    ).toBe(false);
   });
 });
 

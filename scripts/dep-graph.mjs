@@ -8,6 +8,36 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = path.resolve(scriptDir, "..");
 const defaultDocsDir = path.join(defaultRootDir, "docs");
 
+export function usageText() {
+  return [
+    "Usage: node scripts/dep-graph.mjs [--help]",
+    "",
+    "  --help  Show this help without writing docs/dep-graph.dot",
+  ].join("\n");
+}
+
+/**
+ * @param {string[]} [argv]
+ * @returns {{ ok: true, help: true } | { ok: true, help: false } | { ok: false, error: string }}
+ */
+export function parseDepGraphCli(argv = []) {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    return { ok: true, help: true };
+  }
+
+  for (const arg of argv) {
+    if (arg.startsWith("-")) {
+      return {
+        ok: false,
+        error: `Unknown flag: ${arg}. ${usageText().split("\n")[0]}`,
+      };
+    }
+    return { ok: false, error: `Unexpected argument: ${arg}` };
+  }
+
+  return { ok: true, help: false };
+}
+
 /**
  * @typedef {{ id: string, label: string, filePath: string, group: string }} GraphNode
  * @typedef {{ from: string, to: string }} GraphEdge
@@ -148,14 +178,41 @@ export function formatDepGraphWriteMessages(result) {
   return messages;
 }
 
-async function main() {
-  const { dotPath, svgPath } = await writeDependencyGraph();
+/**
+ * @param {string[]} [argv]
+ * @param {{ log?: (message: string) => void, errorLog?: (message: string) => void, write?: typeof writeDependencyGraph }} [options]
+ * @returns {Promise<{ ok: true, help?: true, dotPath?: string, svgPath?: string | null } | { ok: false, error: string }>}
+ */
+export async function runDepGraphCli(argv = process.argv.slice(2), options = {}) {
+  const log = options.log ?? console.log;
+  const errorLog = options.errorLog ?? console.error;
+  const write = options.write ?? writeDependencyGraph;
+
+  const parsed = parseDepGraphCli(argv);
+  if (!parsed.ok) {
+    errorLog(parsed.error);
+    return { ok: false, error: parsed.error };
+  }
+  if (parsed.help) {
+    log(usageText());
+    return { ok: true, help: true };
+  }
+
+  const { dotPath, svgPath } = await write();
   for (const message of formatDepGraphWriteMessages({
     rootDir: defaultRootDir,
     dotPath,
     svgPath,
   })) {
-    console.log(message);
+    log(message);
+  }
+  return { ok: true, dotPath, svgPath };
+}
+
+async function main() {
+  const result = await runDepGraphCli();
+  if (!result.ok) {
+    process.exitCode = 1;
   }
 }
 
@@ -180,13 +237,13 @@ async function collectSourceFiles(rootDir) {
       continue;
     }
 
-    const workerSrcDir = path.join(workersDir, entry.name, "src");
-    const exists = await pathExists(workerSrcDir);
-    if (!exists) {
-      continue;
+    const workerRoot = path.join(workersDir, entry.name);
+    for (const sourceDirName of ["src", "commands"]) {
+      const sourceDir = path.join(workerRoot, sourceDirName);
+      if (await pathExists(sourceDir)) {
+        workerFiles.push(...(await collectTsFiles(sourceDir)));
+      }
     }
-
-    workerFiles.push(...(await collectTsFiles(workerSrcDir)));
   }
 
   const allFiles = [...sharedFiles, ...workerFiles].sort();
@@ -359,7 +416,12 @@ function toLabel(relativePath) {
     return path.basename(relativePath, ".ts");
   }
 
-  const workerPrefix = /^workers\/[^/]+\/src\//;
+  const workerSrcPrefix = /^workers\/[^/]+\/src\//;
+  if (workerSrcPrefix.test(relativePath)) {
+    return relativePath.replace(workerSrcPrefix, "").replace(/\.ts$/, "");
+  }
+
+  const workerPrefix = /^workers\/[^/]+\//;
   if (workerPrefix.test(relativePath)) {
     return relativePath.replace(workerPrefix, "").replace(/\.ts$/, "");
   }
