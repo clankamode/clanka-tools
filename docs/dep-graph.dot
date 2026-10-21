@@ -21,6 +21,9 @@ digraph dependency_graph {
     label = "clanka-discord";
     color = "#d0d7de";
     style = "rounded";
+    "workers/clanka-discord/commands/handlers.test" [label="commands/handlers.test", tooltip="workers/clanka-discord/commands/handlers.test.ts"];
+    "workers/clanka-discord/commands/registry" [label="commands/registry", tooltip="workers/clanka-discord/commands/registry.ts"];
+    "workers/clanka-discord/commands/registry.test" [label="commands/registry.test", tooltip="workers/clanka-discord/commands/registry.test.ts"];
     "workers/clanka-discord/src/index" [label="index", tooltip="workers/clanka-discord/src/index.ts"];
     "workers/clanka-discord/src/index.test" [label="index.test", tooltip="workers/clanka-discord/src/index.test.ts"];
   }
@@ -30,6 +33,7 @@ digraph dependency_graph {
     color = "#d0d7de";
     style = "rounded";
     "workers/clanka-reviewer/src/index" [label="index", tooltip="workers/clanka-reviewer/src/index.ts"];
+    "workers/clanka-reviewer/src/index.test" [label="index.test", tooltip="workers/clanka-reviewer/src/index.test.ts"];
   }
 
   "shared/healthz.test" -> "shared/healthz";
@@ -38,6 +42,13 @@ digraph dependency_graph {
   "shared/index" -> "shared/spine";
   "shared/shield.test" -> "shared/shield";
   "shared/spine.test" -> "shared/spine";
+  "workers/clanka-discord/commands/handlers.test" -> "workers/clanka-discord/commands/registry";
+  "workers/clanka-discord/commands/registry" -> "shared/shield";
+  "workers/clanka-discord/commands/registry" -> "shared/spine";
+  "workers/clanka-discord/commands/registry.test" -> "workers/clanka-discord/commands/registry";
   "workers/clanka-discord/src/index" -> "shared/healthz";
+  "workers/clanka-discord/src/index" -> "workers/clanka-discord/commands/registry";
   "workers/clanka-discord/src/index.test" -> "workers/clanka-discord/src/index";
+  "workers/clanka-reviewer/src/index" -> "shared/spine";
+  "workers/clanka-reviewer/src/index.test" -> "workers/clanka-reviewer/src/index";
 }

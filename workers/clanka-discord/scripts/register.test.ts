@@ -182,6 +182,92 @@ describe("workers/clanka-discord/scripts/register CLI", () => {
     expect(payload.error).toContain("discord error");
   });
 
+  it("fails loudly on unknown flags rather than registering commands", async () => {
+    const registerModule = await loadRegisterModule();
+    const errorLog = vi.fn<(message: string) => void>();
+    const fetchImpl = vi.fn<typeof fetch>();
+
+    const result = await registerModule.registerCommands({
+      applicationId: "app-id",
+      token: "bot-token",
+      fetchImpl,
+      argv: ["--dry-run"],
+      log: vi.fn(),
+      errorLog,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/Unknown flag: --dry-run/);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(errorLog).toHaveBeenCalledWith(expect.stringContaining("Unknown flag: --dry-run"));
+  });
+
+  it("reports unknown flags as JSON errors in --json mode without calling Discord", async () => {
+    const registerModule = await loadRegisterModule();
+    const log = vi.fn<(message: string) => void>();
+    const fetchImpl = vi.fn<typeof fetch>();
+
+    const result = await registerModule.registerCommands({
+      applicationId: "app-id",
+      token: "bot-token",
+      fetchImpl,
+      argv: ["--json", "--guild", "123"],
+      log,
+      errorLog: vi.fn(),
+    });
+
+    expect(result.ok).toBe(false);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    const payload = JSON.parse(log.mock.calls[0][0]) as { ok: boolean; error: string };
+    expect(payload.ok).toBe(false);
+    expect(payload.error).toMatch(/Unknown flag: --guild/);
+  });
+
+  it("does not report success when Discord returns HTTP 200 with a non-JSON body", async () => {
+    const registerModule = await loadRegisterModule();
+    const errorLog = vi.fn<(message: string) => void>();
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response("not-json", { status: 200 })
+    );
+
+    const result = await registerModule.registerCommands({
+      applicationId: "app-id",
+      token: "bot-token",
+      fetchImpl,
+      argv: [],
+      log: vi.fn(),
+      errorLog,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(200);
+    expect(result.error).toMatch(/non-JSON body/i);
+    expect(errorLog).toHaveBeenCalledWith("Error registering commands");
+    expect(errorLog).toHaveBeenCalledWith(expect.stringContaining("could not be verified"));
+  });
+
+  it("does not report success when Discord returns HTTP 200 with a non-list body", async () => {
+    const registerModule = await loadRegisterModule();
+    const log = vi.fn<(message: string) => void>();
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 })
+    );
+
+    const result = await registerModule.registerCommands({
+      applicationId: "app-id",
+      token: "bot-token",
+      fetchImpl,
+      argv: ["--json"],
+      log,
+      errorLog: vi.fn(),
+    });
+
+    expect(result.ok).toBe(false);
+    const payload = JSON.parse(log.mock.calls[0][0]) as { ok: boolean; error: string };
+    expect(payload.ok).toBe(false);
+    expect(payload.error).toMatch(/not a command list/i);
+  });
+
   it("returns network errors in plain text mode", async () => {
     const registerModule = await loadRegisterModule();
     const errorLog = vi.fn<(message: string) => void>();
